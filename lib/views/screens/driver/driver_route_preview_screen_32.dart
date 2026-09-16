@@ -13,6 +13,7 @@ class DriverRoutePreviewScreen extends StatefulWidget {
   final LocationPoint? destination;
   final RouteResult? route;
   final String? date;
+  final DateTime? selectedDateTime;
   final String? time;
   final String? seats;
   final String? fare;
@@ -26,6 +27,7 @@ class DriverRoutePreviewScreen extends StatefulWidget {
     this.destination,
     this.route,
     this.date,
+    this.selectedDateTime,
     this.time,
     this.seats,
     this.fare,
@@ -180,7 +182,9 @@ class _DriverRoutePreviewScreenState extends State<DriverRoutePreviewScreen> {
       'price': parsedFare,
       'pricePerSeat': parsedFare,
       'maxLuggagePerPassenger': 2,
-      'departs': widget.date ?? DateTime.now().add(const Duration(days: 1)).toIso8601String(),
+      'departs': widget.selectedDateTime?.toIso8601String() ?? widget.date ?? DateTime.now().add(const Duration(days: 1)).toIso8601String(),
+      'date': widget.selectedDateTime?.toIso8601String() ?? widget.date ?? DateTime.now().add(const Duration(days: 1)).toIso8601String(),
+      'departureDate': widget.date ?? (widget.selectedDateTime != null ? '${widget.selectedDateTime!.day}-${widget.selectedDateTime!.month}-${widget.selectedDateTime!.year}' : ''),
       'departureTime': widget.time ?? '06:00 AM',
       'arrivalTime': '10:30 AM',
       'intermediatePickups': dynamicIntermediatePickups,
@@ -353,6 +357,13 @@ class _DriverRoutePreviewScreenState extends State<DriverRoutePreviewScreen> {
                             interactive: true,
                           ),
                         ),
+
+                        if (_isLoadingRoute)
+                          const Positioned.fill(
+                            child: Center(
+                              child: CircularProgressIndicator(color: AppColors.primary),
+                            ),
+                          ),
 
                         // Along the route chips bar matching Image 3
                         Positioned(

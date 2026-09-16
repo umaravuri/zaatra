@@ -243,11 +243,19 @@ class DriverService {
   }
 
   // 9. Driver Upcoming Rides List API (Mobile)
-  // Endpoint: GET /drivers/upcoming-rides
+  // Endpoint: GET /rides?status=scheduled (fallback to /drivers/upcoming-rides)
   static Future<Map<String, dynamic>> getUpcomingRides() async {
     try {
-      final res = await ApiService.get('/drivers/upcoming-rides');
-      return res;
+      final res = await ApiService.get('/rides?status=scheduled');
+      if (res['success'] == true && res['rides'] is List) {
+        return {
+          'success': true,
+          'upcomingRides': res['rides'],
+          'rides': res['rides'],
+        };
+      }
+      final fallbackRes = await ApiService.get('/drivers/upcoming-rides');
+      return fallbackRes;
     } catch (e) {
       return {
         'success': false,

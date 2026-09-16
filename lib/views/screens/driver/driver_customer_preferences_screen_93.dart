@@ -265,7 +265,9 @@ class _DriverCustomerPreferencesScreenState extends State<DriverCustomerPreferen
         'price': widget.rideDetails?['price'] ?? 850,
         'pricePerSeat': widget.rideDetails?['pricePerSeat'] ?? 850,
         'maxLuggagePerPassenger': _luggageCount > 0 ? _luggageCount : 2,
-        'departs': widget.rideDetails?['departs'] ?? DateTime.now().add(const Duration(days: 2)).toIso8601String(),
+        'departs': widget.rideDetails?['departs'] ?? widget.rideDetails?['date'] ?? DateTime.now().add(const Duration(days: 2)).toIso8601String(),
+        'date': widget.rideDetails?['date'] ?? widget.rideDetails?['departs'] ?? DateTime.now().add(const Duration(days: 2)).toIso8601String(),
+        'departureDate': widget.rideDetails?['departureDate'] ?? '',
         'departureTime': widget.rideDetails?['departureTime'] ?? '06:00 AM',
         'arrivalTime': widget.rideDetails?['arrivalTime'] ?? '10:30 AM',
         'preferences': {

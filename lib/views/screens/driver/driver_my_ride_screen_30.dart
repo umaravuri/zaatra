@@ -715,6 +715,7 @@ class _DriverMyRideScreenState extends State<DriverMyRideScreen> {
           destination: _destLocation,
           route: _routeResult,
           date: _date,
+          selectedDateTime: _selectedDateTime,
           time: _time,
           seats: _seats,
           fare: formattedFare,

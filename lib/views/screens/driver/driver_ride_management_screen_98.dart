@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../services/api_service.dart';
 import '../../../services/driver_service.dart';
+import '../../../services/ride_service.dart';
 import '../../widgets/custom_button.dart';
 import 'driver_booking_requests_screen_99.dart';
 import 'driver_home_dashboard_screen_83.dart';
@@ -64,48 +64,69 @@ class _DriverRideManagementScreenState extends State<DriverRideManagementScreen>
 
       final List<Map<String, dynamic>> allFetchedRides = [];
 
-      // 1. Fetch from Driver Upcoming Rides API (GET /api/drivers/upcoming-rides)
+      // 1. Fetch from Unified Rides API (GET /api/rides)
       try {
-        final upcomingRes = await DriverService.getUpcomingRides();
-        if (upcomingRes['success'] == true && upcomingRes['upcomingRides'] is List) {
-          final list = List<Map<String, dynamic>>.from(upcomingRes['upcomingRides']);
+        final ridesRes = await RideService.getRides();
+        if (ridesRes['success'] == true && ridesRes['rides'] is List) {
+          final list = List<Map<String, dynamic>>.from(ridesRes['rides']);
           allFetchedRides.addAll(list);
         }
       } catch (_) {}
 
-      // 2. Fetch from Rides API (GET /api/rides) to get all published rides
-      try {
-        final ridesRes = await ApiService.get('/rides');
-        if (ridesRes['success'] == true && ridesRes['rides'] is List) {
-          final list = List<Map<String, dynamic>>.from(ridesRes['rides']);
-          for (final r in list) {
-            // Check if already in list to avoid duplicates
-            final id = r['_id'] ?? r['rideId'] ?? r['id'];
-            final exists = allFetchedRides.any((item) => (item['_id'] ?? item['rideId'] ?? item['id']) == id);
-            if (!exists) {
-              allFetchedRides.add(r);
+      // 2. Also check Driver Upcoming Rides helper endpoint for any driver-specific scheduled rides
+      if (allFetchedRides.isEmpty) {
+        try {
+          final upcomingRes = await DriverService.getUpcomingRides();
+          if (upcomingRes['success'] == true && upcomingRes['upcomingRides'] is List) {
+            final list = List<Map<String, dynamic>>.from(upcomingRes['upcomingRides']);
+            for (final r in list) {
+              final id = r['_id'] ?? r['rideId'] ?? r['id'];
+              final exists = allFetchedRides.any((item) => (item['_id'] ?? item['rideId'] ?? item['id']) == id);
+              if (!exists) {
+                allFetchedRides.add(r);
+              }
             }
           }
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
 
-      // Group rides by category
+      // Group rides by category with strict Date Guard (Backdated filter)
       final active = <Map<String, dynamic>>[];
       final upcoming = <Map<String, dynamic>>[];
       final completed = <Map<String, dynamic>>[];
       final cancelled = <Map<String, dynamic>>[];
 
+      final now = DateTime.now();
+      final todayStart = DateTime(now.year, now.month, now.day);
+      final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
+
       for (final ride in allFetchedRides) {
         final status = (ride['status']?.toString().toLowerCase()) ?? 'scheduled';
-        if (status == 'active' || status == 'in-progress' || status == 'ongoing' || status == 'boarding') {
-          active.add(ride);
+        final rideDateTime = _parseRideDateTime(ride);
+
+        if (status == 'cancelled' || status == 'rejected') {
+          cancelled.add(ride);
         } else if (status == 'completed' || status == 'finished') {
           completed.add(ride);
-        } else if (status == 'cancelled' || status == 'rejected') {
-          cancelled.add(ride);
+        } else if (status == 'active' || status == 'in-progress' || status == 'in_progress' || status == 'ongoing' || status == 'boarding') {
+          // If marked active but date was in the past (before today), sort as expired/completed
+          if (rideDateTime != null && rideDateTime.isBefore(todayStart)) {
+            completed.add(ride);
+          } else {
+            active.add(ride);
+          }
         } else {
-          // scheduled, pending, or default
-          upcoming.add(ride);
+          // 'scheduled' or pending rides:
+          if (rideDateTime != null && rideDateTime.isBefore(todayStart)) {
+            // 🚫 Backdated ride! Scheduled date has already passed -> sort into Completed / Past
+            completed.add(ride);
+          } else if (rideDateTime != null && !rideDateTime.isAfter(todayEnd)) {
+            // Scheduled for TODAY -> Active tab
+            active.add(ride);
+          } else {
+            // Scheduled for FUTURE dates (tomorrow onwards) -> Upcoming tab
+            upcoming.add(ride);
+          }
         }
       }
 
@@ -140,19 +161,53 @@ class _DriverRideManagementScreenState extends State<DriverRideManagementScreen>
     }
   }
 
-  String _formatRideDate(dynamic departsValue) {
-    if (departsValue == null) return '17 - 08 - 2026 ( Monday )';
-    try {
-      final dt = departsValue is DateTime ? departsValue : DateTime.tryParse(departsValue.toString());
-      if (dt != null) {
-        final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        final days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-        final dayName = days[dt.weekday - 1];
-        final monthName = months[dt.month - 1];
-        return '${dt.day.toString().padLeft(2, '0')} $monthName, ${dt.year} ( $dayName )';
+  /// Robust date parser extracting date from departs, departureDate, date, scheduledDate, or createdAt
+  DateTime? _parseRideDateTime(Map<String, dynamic> ride) {
+    final val = ride['departs'] ?? ride['departureDate'] ?? ride['date'] ?? ride['scheduledDate'] ?? ride['createdAt'];
+    if (val == null) return null;
+    if (val is DateTime) return val.toLocal();
+
+    final str = val.toString().trim();
+    if (str.isEmpty) return null;
+
+    // 1. Try ISO8601 string parser
+    final isoParsed = DateTime.tryParse(str);
+    if (isoParsed != null) return isoParsed.toLocal();
+
+    // 2. Try regex extraction for DD-MM-YYYY or YYYY-MM-DD
+    final numbers = RegExp(r'(\d+)').allMatches(str).map((m) => int.tryParse(m.group(0)!)).whereType<int>().toList();
+    if (numbers.length >= 3) {
+      if (numbers[0] > 1000) {
+        // YYYY-MM-DD
+        return DateTime(numbers[0], numbers[1], numbers[2]);
       }
-    } catch (_) {}
-    return departsValue.toString();
+      if (numbers[2] > 1000) {
+        // DD-MM-YYYY
+        return DateTime(numbers[2], numbers[1], numbers[0]);
+      }
+    }
+    return null;
+  }
+
+  String _formatRideDate(Map<String, dynamic> ride) {
+    final dt = _parseRideDateTime(ride);
+    if (dt != null) {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      final dayName = days[dt.weekday - 1];
+      final monthName = months[dt.month - 1];
+      return '${dt.day.toString().padLeft(2, '0')} $monthName, ${dt.year} ( $dayName )';
+    }
+
+    final raw = ride['departureDate'] ?? ride['date'] ?? ride['departs'];
+    if (raw != null && raw.toString().isNotEmpty) {
+      return raw.toString();
+    }
+
+    final now = DateTime.now();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    return '${now.day.toString().padLeft(2, '0')} ${months[now.month - 1]}, ${now.year} ( ${days[now.weekday - 1]} )';
   }
 
   void _handleBack() {
@@ -341,7 +396,7 @@ class _DriverRideManagementScreenState extends State<DriverRideManagementScreen>
     final to = ride['to'] ?? ride['destinationLocation'] ?? 'Tirupati';
     final departureTime = ride['departureTime'] ?? '06:00 AM';
     final arrivalTime = ride['arrivalTime'] ?? '10:30 AM';
-    final dateStr = _formatRideDate(ride['departs']);
+    final dateStr = _formatRideDate(ride);
     final bookedSeats = ride['booked'] ?? ride['seatsBooked'] ?? 0;
     final totalSeats = ride['seats'] ?? ride['totalSeats'] ?? 4;
     final price = ride['price'] ?? ride['pricePerSeat'] ?? 850;

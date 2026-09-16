@@ -14,6 +14,7 @@ class DriverIntermediatePickupsScreen extends StatefulWidget {
   final LocationPoint? destination;
   final RouteResult? route;
   final String? date;
+  final DateTime? selectedDateTime;
   final String? time;
   final String? seats;
   final String? fare;
@@ -25,6 +26,7 @@ class DriverIntermediatePickupsScreen extends StatefulWidget {
     this.destination,
     this.route,
     this.date,
+    this.selectedDateTime,
     this.time,
     this.seats,
     this.fare,
@@ -250,6 +252,7 @@ class _DriverIntermediatePickupsScreenState extends State<DriverIntermediatePick
           destination: widget.destination,
           route: widget.route,
           date: widget.date,
+          selectedDateTime: widget.selectedDateTime,
           time: widget.time,
           seats: widget.seats,
           fare: widget.fare,

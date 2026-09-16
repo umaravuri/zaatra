@@ -29,6 +29,35 @@ class RideService {
     }
   }
 
+  /// Unified API: GET /api/rides with query filtering (?status=, ?driverId=, ?search=)
+  static Future<Map<String, dynamic>> getRides({
+    String? status,
+    String? driverId,
+    String? from,
+    String? to,
+    String? search,
+  }) async {
+    try {
+      final queryParams = <String>[];
+      if (status != null && status.isNotEmpty) queryParams.add('status=${Uri.encodeComponent(status)}');
+      if (driverId != null && driverId.isNotEmpty) queryParams.add('driverId=${Uri.encodeComponent(driverId)}');
+      if (from != null && from.isNotEmpty) queryParams.add('from=${Uri.encodeComponent(from)}');
+      if (to != null && to.isNotEmpty) queryParams.add('to=${Uri.encodeComponent(to)}');
+      if (search != null && search.isNotEmpty) queryParams.add('search=${Uri.encodeComponent(search)}');
+
+      final queryString = queryParams.isNotEmpty ? '?${queryParams.join('&')}' : '';
+      final res = await ApiService.get('/rides$queryString');
+      return res;
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to fetch rides: $e',
+        'rides': [],
+      };
+    }
+  }
+
+
   /// API 1 & 2: GET /api/rides/active/start-details or /api/rides/{rideId}/start-details
   static Future<Map<String, dynamic>> getRideStartDetails({String? rideId}) async {
     final endpoint = (rideId != null && rideId.isNotEmpty && rideId != 'active')
