@@ -1,0 +1,408 @@
+﻿================================================================================
+          ZAATRA BACKEND API SPECIFICATION: HOST PROPERTY REGISTRATION
+================================================================================
+
+Target Endpoint : POST /api/properties/register
+Authentication  : Bearer <JWT_TOKEN> (Required in 'Authorization' header)
+Content-Type    : application/json
+Expected Role   : Host (or Admin)
+
+--------------------------------------------------------------------------------
+1. OVERVIEW & COMMON FIELDS (Required for ALL Property Types)
+--------------------------------------------------------------------------------
+
+Every property registration payload must include the following top-level fields:
+
+Field Name       | Type    | Required | Description / Example
+-----------------+---------+----------+-----------------------------------------
+propertyName     | String  | YES      | e.g. "Palm Grove Beach Resort"
+propertyType     | String  | YES      | Enum: "Resort" | "Villa" | "Farmhouse" | "Guest House" | "Hotel"
+address          | Object  | YES      | Detailed location object (see below)
+description      | String  | YES      | Detailed marketing & amenities narrative
+houseRules       | Array   | YES      | List of rules (e.g. ["No Smoking", "No Pets", ...])
+checkInCheckOut  | Object  | YES      | Check-in and check-out timings
+photos           | Array   | YES      | List of uploaded image URLs / filenames
+documents        | Object  | YES      | KYC and legal documents (see below)
+pricing          | Object  | YES      | Pricing structure (varies by type)
+propertyDetails  | Object  | YES      | Category-specific specifications (see below)
+amenities        | Array/  | YES      | Array of strings (or object for Hotel)
+                 | Object  |          |
+
+--- Common 'address' Object Schema:
+{
+  "doorFlatNo": "D.No 4-56/A",                 // String (Required)
+  "streetRoad": "Road No 2, Child Park Street",// String (Required)
+  "landmark": "Near Axis Bank",               // String (Optional)
+  "district": "Rangareddy",                   // String (Required)
+  "city": "Hyderabad",                         // String (Required)
+  "state": "Telangana",                       // String (Required)
+  "pincode": "500081",                         // String (Required, 6-digit)
+  "latitude": 17.4483,                        // Number (Optional / Geo)
+  "longitude": 78.3915                        // Number (Optional / Geo)
+}
+
+--- Common 'checkInCheckOut' Object Schema:
+{
+  "checkInTime": "02 : 00 PM",                // String (Required, e.g. "14:00" or "02:00 PM")
+  "checkOutTime": "11 : 00 AM"                // String (Required, e.g. "11:00" or "11:00 AM")
+}
+
+--- Common 'documents' Object Schema (KYC Attachments):
+{
+  "propertyOwnershipProof": "ownership_doc_01.pdf", // String (Required)
+  "identityProof": "aadhaar_pan_01.pdf",            // String (Required)
+  "taxRegistrationDocuments": "property_tax_01.pdf",// String (Required)
+  "nocOtherDocuments": "noc_certificate_01.pdf"     // String (Optional)
+}
+
+--------------------------------------------------------------------------------
+2. CATEGORY-SPECIFIC SPECIFICATIONS
+--------------------------------------------------------------------------------
+
+================================================================================
+CATEGORY A: RESORT
+================================================================================
+1. 'propertyDetails' Required Fields:
+   - cottages     : (Integer) Number of individual cottages / suites (e.g. 12)
+   - pools        : (Integer) Number of swimming pools (e.g. 2)
+   - maxCapacity  : (Integer) Maximum total guest capacity (e.g. 60)
+   - restaurants  : (Integer) Number of in-house dining/restaurants (e.g. 2)
+
+2. 'amenities' Array:
+   - ["Private Beach Access", "Swimming Pool", "Spa & Wellness", "Restaurant & Bar", "Kids Play Area", "Wi-Fi", "Parking", "Conference Hall", "Room Service", "Gym / Fitness Center"]
+
+3. 'pricing' Object:
+   - basePricePerNight               : (Number) Base rate per cottage/night (e.g. 8500)
+   - guestPricePerExtraGuestPerNight : (Number) Fee per additional guest (e.g. 1500)
+   - cleaningFee                     : (Number) Cleaning charges (e.g. 1000)
+   - serviceFee                      : (Number) Resort maintenance fee (e.g. 500)
+   - currency                        : (String) "INR"
+
+--- Complete Resort Sample JSON Payload:
+{
+  "propertyType": "Resort",
+  "propertyName": "Palm Grove Beach Resort",
+  "propertyDetails": {
+    "cottages": 12,
+    "pools": 2,
+    "maxCapacity": 60,
+    "restaurants": 2
+  },
+  "address": {
+    "doorFlatNo": "Plot 12-B",
+    "streetRoad": "Beach View Boulevard",
+    "landmark": "Near Lighthouse Point",
+    "district": "Visakhapatnam",
+    "city": "Visakhapatnam",
+    "state": "Andhra Pradesh",
+    "pincode": "530003"
+  },
+  "description": "Luxury 5-star beachfront resort with private sea-facing cottages, multiple infinity pools, fine dining restaurants, and holistic spa treatments.",
+  "amenities": [
+    "Private Beach Access",
+    "Swimming Pool",
+    "Spa & Wellness",
+    "Restaurant & Bar",
+    "Kids Play Area",
+    "Wi-Fi",
+    "Parking"
+  ],
+  "houseRules": [
+    "No Smoking inside cottages",
+    "Pets allowed in designated areas",
+    "Quiet Hours (11:00 PM – 06:00 AM)",
+    "Valid Gov ID mandatory for all guests"
+  ],
+  "pricing": {
+    "basePricePerNight": 8500,
+    "guestPricePerExtraGuestPerNight": 1500,
+    "cleaningFee": 1000,
+    "serviceFee": 500,
+    "currency": "INR"
+  },
+  "checkInCheckOut": {
+    "checkInTime": "02 : 00 PM",
+    "checkOutTime": "11 : 00 AM"
+  },
+  "photos": [
+    "resort_front_facade.jpg",
+    "infinity_pool_sunset.jpg",
+    "luxury_cottage_bedroom.jpg",
+    "beachside_restaurant.jpg"
+  ],
+  "documents": {
+    "propertyOwnershipProof": "resort_deed.pdf",
+    "identityProof": "owner_aadhaar.pdf",
+    "taxRegistrationDocuments": "gst_tax_reg.pdf",
+    "nocOtherDocuments": "tourism_license.pdf"
+  }
+}
+
+================================================================================
+CATEGORY B: VILLA
+================================================================================
+1. 'propertyDetails' Required Fields:
+   - bedrooms  : (Integer) Number of private bedrooms (e.g. 4)
+   - bathrooms : (Integer) Number of attached/common bathrooms (e.g. 3)
+
+2. 'amenities' Array:
+   - ["Private Swimming Pool", "Lawn & Garden", "Modular Kitchen", "BBQ Setup", "Balcony View", "High-Speed Wi-Fi", "Air Conditioning", "Private Car Parking", "Smart TV with OTT", "Power Backup"]
+
+3. 'pricing' Object:
+   - basePricePerNight               : (Number) Entire villa nightly price (e.g. 12000)
+   - guestPricePerExtraGuestPerNight : (Number) Extra guest surcharge (e.g. 1200)
+   - cleaningFee                     : (Number) Villa cleaning fee (e.g. 1500)
+   - serviceFee                      : (Number) Caretaker / utility fee (e.g. 500)
+   - currency                        : (String) "INR"
+
+--- Complete Villa Sample JSON Payload:
+{
+  "propertyType": "Villa",
+  "propertyName": "Sea View Sunset Villa",
+  "propertyDetails": {
+    "bedrooms": 4,
+    "bathrooms": 3
+  },
+  "address": {
+    "doorFlatNo": "Villa No 8",
+    "streetRoad": "Hilltop Palm Avenue",
+    "landmark": "Opposite Sunset Point",
+    "district": "Goa",
+    "city": "Candolim",
+    "state": "Goa",
+    "pincode": "403515"
+  },
+  "description": "Exclusive 4-BHK private luxury villa featuring a private heated pool, landscaped lawn, fully equipped modular kitchen, and sea-view balconies.",
+  "amenities": [
+    "Private Swimming Pool",
+    "Lawn & Garden",
+    "Modular Kitchen",
+    "BBQ Setup",
+    "High-Speed Wi-Fi",
+    "Air Conditioning",
+    "Private Car Parking"
+  ],
+  "houseRules": [
+    "No smoking indoors",
+    "No loud music post 10:00 PM",
+    "Pool closes at 10:00 PM for maintenance",
+    "Security deposit of ₹5000 refundable at checkout"
+  ],
+  "pricing": {
+    "basePricePerNight": 12000,
+    "guestPricePerExtraGuestPerNight": 1200,
+    "cleaningFee": 1500,
+    "serviceFee": 500,
+    "currency": "INR"
+  },
+  "checkInCheckOut": {
+    "checkInTime": "01 : 00 PM",
+    "checkOutTime": "11 : 00 AM"
+  },
+  "photos": [
+    "villa_pool_deck.jpg",
+    "living_room_luxury.jpg",
+    "master_suite_balcony.jpg",
+    "kitchen_dining.jpg"
+  ],
+  "documents": {
+    "propertyOwnershipProof": "villa_sale_deed.pdf",
+    "identityProof": "owner_passport.pdf",
+    "taxRegistrationDocuments": "municipality_tax.pdf",
+    "nocOtherDocuments": "gated_society_noc.pdf"
+  }
+}
+
+================================================================================
+CATEGORY C: FARMHOUSE
+================================================================================
+1. 'propertyDetails' Required Fields:
+   - landArea      : (String) Total land/acreage measurement (e.g. "2.5 Acres" or "10,000 Sq.Ft")
+   - bedrooms      : (Integer) Number of bedrooms in farmhouse building (e.g. 4)
+   - bathrooms     : (Integer) Number of bathrooms (e.g. 4)
+   - eventCapacity : (Integer) Maximum capacity for outdoor events/gatherings (e.g. 150)
+
+2. 'amenities' Array:
+   - ["Party Lawn & Stage", "Swimming Pool", "Open Gazebo", "Outdoor BBQ & Tandoor", "Campfire / Bonfire Pit", "Indoor Games (Table Tennis, Carrom)", "High-Power Music System", "Full Kitchen Setup", "Volleyball Court"]
+
+3. 'pricing' Object:
+   - basePricePerNight               : (Number) Nightly booking rate (e.g. 15000)
+   - guestPricePerExtraGuestPerNight : (Number) Extra day-visitor charge (e.g. 800)
+   - cleaningFee                     : (Number) Post-event cleaning charge (e.g. 2000)
+   - serviceFee                      : (Number) Generator / security charge (e.g. 1000)
+   - currency                        : (String) "INR"
+
+--- Complete Farmhouse Sample JSON Payload:
+{
+  "propertyType": "Farmhouse",
+  "propertyName": "Green Valley Nature Farmhouse",
+  "propertyDetails": {
+    "landArea": "2.5 Acres",
+    "bedrooms": 4,
+    "bathrooms": 4,
+    "eventCapacity": 150
+  },
+  "address": {
+    "doorFlatNo": "Survey No 142/A",
+    "streetRoad": "Chevela Road, Moinabad",
+    "landmark": "Near Chilkur Balaji Temple Road",
+    "district": "Rangareddy",
+    "city": "Hyderabad",
+    "state": "Telangana",
+    "pincode": "501504"
+  },
+  "description": "Sprawling 2.5-acre lush green farmhouse ideal for family get-togethers, corporate outings, and celebration events. Features a large party lawn, pool, bonfire, and indoor sports.",
+  "amenities": [
+    "Party Lawn & Stage",
+    "Swimming Pool",
+    "Open Gazebo",
+    "Outdoor BBQ & Tandoor",
+    "Campfire / Bonfire Pit",
+    "High-Power Music System",
+    "Full Kitchen Setup"
+  ],
+  "houseRules": [
+    "Commercial DJ sound permitted until 10:00 PM only",
+    "No glassware inside the swimming pool",
+    "Host must be notified in advance for events exceeding 50 guests"
+  ],
+  "pricing": {
+    "basePricePerNight": 15000,
+    "guestPricePerExtraGuestPerNight": 800,
+    "cleaningFee": 2000,
+    "serviceFee": 1000,
+    "currency": "INR"
+  },
+  "checkInCheckOut": {
+    "checkInTime": "12 : 00 PM",
+    "checkOutTime": "10 : 00 AM"
+  },
+  "photos": [
+    "farmhouse_lawn_view.jpg",
+    "farmhouse_pool.jpg",
+    "gazebo_seating.jpg",
+    "bedroom_suite.jpg"
+  ],
+  "documents": {
+    "propertyOwnershipProof": "agriculture_passbook.pdf",
+    "identityProof": "host_aadhaar.pdf",
+    "taxRegistrationDocuments": "panchayat_tax_receipt.pdf",
+    "nocOtherDocuments": "police_noc.pdf"
+  }
+}
+
+================================================================================
+CATEGORY D: GUEST HOUSE
+================================================================================
+1. 'propertyDetails' Required Fields:
+   - guestRooms    : (Integer) Number of individual guest rooms (e.g. 6)
+   - attachedBaths : (Integer) Rooms having attached private bathrooms (e.g. 4)
+   - sharedBaths   : (Integer) Common / shared bathrooms (e.g. 2)
+   - maxGuests     : (Integer) Total maximum overnight guests (e.g. 16)
+
+2. 'amenities' Array:
+   - ["Wi-Fi", "Air Conditioning", "24/7 Hot Water", "Living Room Access", "Daily Housekeeping", "RO Drinking Water Purifier", "Breakfast Included", "CCTV Security", "Receptionist / Caretaker on Duty"]
+
+3. 'pricing' Object:
+   - basePricePerNight               : (Number) Base price per room or full house (e.g. 3500)
+   - guestPricePerExtraGuestPerNight : (Number) Extra mattress / guest fee (e.g. 600)
+   - cleaningFee                     : (Number) Room cleaning fee (e.g. 400)
+   - serviceFee                      : (Number) Service fee (e.g. 200)
+   - currency                        : (String) "INR"
+
+--- Complete Guest House Sample JSON Payload:
+{
+  "propertyType": "Guest House",
+  "propertyName": "Sai Krupa Executive Guest House",
+  "propertyDetails": {
+    "guestRooms": 6,
+    "attachedBaths": 4,
+    "sharedBaths": 2,
+    "maxGuests": 16
+  },
+  "address": {
+    "doorFlatNo": "House No 3-6-198",
+    "streetRoad": "Lane 4, Himayatnagar Main Road",
+    "landmark": "Near Minerva Coffee Shop",
+    "district": "Hyderabad",
+    "city": "Hyderabad",
+    "state": "Telangana",
+    "pincode": "500029"
+  },
+  "description": "Centrally located executive guest house offering comfortable, sanitized AC rooms with high-speed internet, complimentary breakfast, and round-the-clock caretaker support.",
+  "amenities": [
+    "Wi-Fi",
+    "Air Conditioning",
+    "24/7 Hot Water",
+    "Daily Housekeeping",
+    "RO Drinking Water Purifier",
+    "Breakfast Included",
+    "CCTV Security"
+  ],
+  "houseRules": [
+    "Strictly no unmarried couples without local ID verification",
+    "Quiet hours 10:00 PM – 07:00 AM",
+    "Smoking strictly prohibited on premises"
+  ],
+  "pricing": {
+    "basePricePerNight": 3500,
+    "guestPricePerExtraGuestPerNight": 600,
+    "cleaningFee": 400,
+    "serviceFee": 200,
+    "currency": "INR"
+  },
+  "checkInCheckOut": {
+    "checkInTime": "12 : 00 PM",
+    "checkOutTime": "11 : 00 AM"
+  },
+  "photos": [
+    "guesthouse_entrance.jpg",
+    "deluxe_room_double_bed.jpg",
+    "attached_washroom.jpg",
+    "common_dining_hall.jpg"
+  ],
+  "documents": {
+    "propertyOwnershipProof": "lease_agreement.pdf",
+    "identityProof": "manager_pan.pdf",
+    "taxRegistrationDocuments": "trade_license.pdf",
+    "nocOtherDocuments": "fire_safety_noc.pdf"
+  }
+}
+
+--------------------------------------------------------------------------------
+3. EXPECTED BACKEND SUCCESS & ERROR RESPONSES
+--------------------------------------------------------------------------------
+
+--- Success Response (HTTP 201 Created / HTTP 200 OK):
+{
+  "success": true,
+  "message": "Property submitted successfully and is pending admin review.",
+  "data": {
+    "propertyId": "PROP_68912401",
+    "hostId": "HOST_55102",
+    "propertyType": "Resort",
+    "propertyName": "Palm Grove Beach Resort",
+    "status": "PENDING_REVIEW",
+    "createdAt": "2026-09-02T11:05:00.000Z"
+  }
+}
+
+--- Validation Error Response (HTTP 400 Bad Request):
+{
+  "success": false,
+  "message": "Validation Error: Missing required property details for Resort.",
+  "errors": [
+    "propertyDetails.cottages is required and must be an integer > 0",
+    "propertyDetails.maxCapacity is required"
+  ]
+}
+
+--- Unauthorized Error Response (HTTP 401 Unauthorized):
+{
+  "success": false,
+  "message": "Invalid or expired authorization token."
+}
+
+================================================================================
+End of API Specification Document
+================================================================================

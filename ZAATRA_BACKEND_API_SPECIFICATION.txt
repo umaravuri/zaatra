@@ -1,0 +1,320 @@
+﻿================================================================================
+                    ZAATRA BACKEND API SPECIFICATION & REFERENCE
+================================================================================
+Base URL: http://localhost:5000/api
+Date: 2026-09-03
+Format: JSON / RESTful HTTP
+Auth Header: Authorization: Bearer <token>
+
+================================================================================
+1. AUTHENTICATION & MOBILE OTP FLOW
+================================================================================
+
+1.1 Direct Email/Password Login
+Endpoint: POST http://localhost:5000/api/auth/login
+Method: POST
+Body:
+{
+  "email": "admin@zaatra.com",
+  "password": "adminpassword123"
+}
+
+1.2 User / Customer Registration
+Endpoint: POST http://localhost:5000/api/auth/register
+Method: POST
+Body:
+{
+  "name": "Ananya Sen",
+  "email": "ananya@example.com",
+  "password": "mysecretpassword123",
+  "phone": "+91 98765 43210",
+  "city": "Bengaluru",
+  "state": "Karnataka",
+  "country": "India",
+  "role": "customer"
+}
+
+1.3 Mobile Number Login Step 1 (Request 6-Digit OTP)
+Endpoint: POST http://localhost:5000/api/auth/mobile/login-init
+Method: POST
+Body:
+{
+  "phone": "+91 98765 43210",
+  "password": "password123"
+}
+Response:
+{
+  "message": "OTP sent successfully to +91 98765 43210",
+  "phone": "+91 98765 43210",
+  "otp": "943545",
+  "expiresInSeconds": 600
+}
+
+1.4 Verify 6-Digit OTP
+Endpoint: POST http://localhost:5000/api/auth/mobile/verify-otp
+Method: POST
+Body:
+{
+  "phone": "+91 98765 43210",
+  "otp": "943545"
+}
+Response:
+{
+  "message": "OTP verified successfully",
+  "phone": "+91 98765 43210",
+  "verified": true
+}
+
+1.5 Choose Role & Complete Login (Returns Token & User)
+Endpoint: POST http://localhost:5000/api/auth/mobile/select-role
+Method: POST
+Body:
+{
+  "phone": "+91 98765 43210",
+  "role": "customer"
+}
+Response:
+{
+  "message": "Role confirmed. Login successful!",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": "C-101",
+    "name": "Aarav Patel",
+    "email": "aarav@zaatra.com",
+    "phone": "+91 98765 43210",
+    "role": "customer",
+    "city": "Goa",
+    "country": "India",
+    "status": "active",
+    "kyc": "verified",
+    "avatar": ""
+  }
+}
+
+================================================================================
+2. HOST PROFILE & PROPERTY REGISTRATION APIS
+================================================================================
+
+2.1 Host Profile Registration
+Endpoint: POST http://localhost:5000/api/hosts/register
+Method: POST
+Body:
+{
+  "name": "Rohan Verma",
+  "email": "rohan.verma@zaatra.com",
+  "phone": "+919876543210",
+  "password": "HostSecretPassword123",
+  "location": "Road No 12, Banjara Hills",
+  "city": "Hyderabad",
+  "state": "Telangana",
+  "country": "India",
+  "aadharNumber": "5489 1234 9876",
+  "aadharDocument": "/uploads/sample_aadhar.png",
+  "panNumber": "ABCDE1234F",
+  "panDocument": "/uploads/sample_pan.png"
+}
+
+2.2 Host Property Registration - Hotel (Multi-Room / Category Schema)
+Endpoint: POST http://localhost:5000/api/properties/register
+Method: POST
+Body:
+{
+  "propertyName": "Grand Royal Hotel",
+  "propertyType": "Hotel",
+  "bookingType": "MULTIPLE_ROOMS",
+  "hostId": "HOST-102",
+  "hostName": "Bharath",
+  "location": "OM sri sai nagar , road no 2",
+  "city": "Tirupati",
+  "state": "andhra pradesh",
+  "country": "India",
+  "totalRooms": 50,
+  "oneShareRooms": 10,
+  "twoShareRooms": 20,
+  "threeShareRooms": 10,
+  "fourShareRooms": 10,
+  "roomCategories": [
+    {
+      "categoryName": "Single Occupancy - Normal",
+      "roomType": "Normal",
+      "occupancy": 1,
+      "totalRooms": 10,
+      "price12h": 1200,
+      "price24h": 2000,
+      "amenities": ["Wi-Fi", "AC", "TV"]
+    },
+    {
+      "categoryName": "Double Occupancy - Deluxe",
+      "roomType": "Deluxe",
+      "occupancy": 2,
+      "totalRooms": 10,
+      "price12h": 2100,
+      "price24h": 3500,
+      "amenities": ["Wi-Fi", "AC", "TV", "Mini Fridge", "24/7 Room Service", "Free Breakfast"]
+    },
+    {
+      "categoryName": "Double Occupancy - Normal",
+      "roomType": "Normal",
+      "occupancy": 2,
+      "totalRooms": 10,
+      "price12h": 1800,
+      "price24h": 3000,
+      "amenities": ["Wi-Fi", "AC", "TV"]
+    },
+    {
+      "categoryName": "Triple Occupancy - Deluxe",
+      "roomType": "Deluxe",
+      "occupancy": 3,
+      "totalRooms": 10,
+      "price12h": 2700,
+      "price24h": 4500,
+      "amenities": ["Wi-Fi", "AC", "TV", "Mini Fridge", "Balcony", "Free Breakfast"]
+    },
+    {
+      "categoryName": "Quad Occupancy - Deluxe",
+      "roomType": "Deluxe",
+      "occupancy": 4,
+      "totalRooms": 10,
+      "price12h": 3300,
+      "price24h": 5500,
+      "amenities": ["Wi-Fi", "AC", "TV", "Mini Bar", "24/7 Room Service", "Free Breakfast"]
+    }
+  ],
+  "checkInTime": "11:00 PM",
+  "checkOutTime": "11:00 AM",
+  "price24h": 3500,
+  "price12h": 2100,
+  "extraGuestPrice": 500,
+  "cleaningFee": 600,
+  "roomServiceFee": 600,
+  "extraHourFee": 100,
+  "currency": "INR",
+  "oneSharePrice": 2000,
+  "twoSharePrice": 3500,
+  "threeSharePrice": 4500,
+  "fourSharePrice": 5500,
+  "description": "Premium 50-room hotel featuring modern single, double, triple, and quad occupancy rooms, in-house dining restaurant, 24/7 room service, and complimentary parking.",
+  "amenities": ["Wi-Fi", "AC", "Restaurant", "Room Service", "Parking", "Elevator"],
+  "houseRules": ["Valid Government ID required at check-in", "No Smoking in corridors"],
+  "images": [
+    "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
+    "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800"
+  ]
+}
+
+2.3 Host Property Registration - Villa / Entire Property Schema
+Endpoint: POST http://localhost:5000/api/properties/register
+Method: POST
+Body:
+{
+  "title": "Sunset Luxury Villa Goa",
+  "type": "Villa",
+  "location": "Candolim Beach Road",
+  "city": "Goa",
+  "state": "Goa",
+  "country": "India",
+  "entireVillaPrice": 8500,
+  "price": 8500,
+  "hasPool": true,
+  "hasGamingZone": true,
+  "hasKitchen": true,
+  "hostName": "Rohan Verma",
+  "images": [
+    "https://images.unsplash.com/photo-1501183638710-841dd1904471?w=800"
+  ]
+}
+
+2.4 Properties CRUD & Admin Approval Endpoints
+- Get All Properties: GET http://localhost:5000/api/properties?type=Hotel&status=pending
+- Get Single Property: GET http://localhost:5000/api/properties/:id (e.g. PR-1001)
+- Update Property: PUT http://localhost:5000/api/properties/:id
+- Delete Property: DELETE http://localhost:5000/api/properties/:id
+- Admin Approval: PATCH http://localhost:5000/api/properties/:id/status
+  Body: { "status": "listed" }
+
+================================================================================
+3. DRIVER PROFILE & VEHICLE ONBOARDING APIS
+================================================================================
+
+3.1 Driver Profile Registration
+Endpoint: POST http://localhost:5000/api/drivers/register
+Method: POST
+Body:
+{
+  "name": "Arjun Sharma",
+  "email": "arjun.driver@zaatra.com",
+  "phone": "+919876501234",
+  "password": "SecretPassword123",
+  "location": "MG Road, Sector 14",
+  "city": "Gurugram",
+  "state": "Haryana",
+  "country": "India",
+  "drivingLicenseNumber": "DL-HR-202600123",
+  "drivingLicenseDocument": "/uploads/dl_arjun.png",
+  "driverPhoto": "/uploads/photo_arjun.png"
+}
+
+3.2 Driver & Vehicle Complete Onboarding
+Endpoint: POST http://localhost:5000/api/drivers/onboarding
+Method: POST
+Body:
+{
+  "name": "Ravi Kumar",
+  "email": "ravikumar@gmail.com",
+  "phone": "+919445678321",
+  "vehicle": "Hyundai Creta",
+  "vehicleMake": "Hyundai",
+  "vehicleModel": "Creta",
+  "vehicleType": "SUV",
+  "vehicleYear": "2024",
+  "fuelType": "Diesel",
+  "vehicleNumberPlate": "AP16GH7890",
+  "vehicleColor": "White",
+  "drivingLicenseNumber": "DL-HR-202600123",
+  "drivingLicenseDocument": "/uploads/dl_arjun.png",
+  "rcDocument": "/uploads/rc_arjun.png",
+  "pollutionDocument": "/uploads/pollution_arjun.png",
+  "driverPhoto": "/uploads/photo_arjun.png"
+}
+
+3.3 Drivers CRUD & Admin Approval Endpoints
+- Get All Drivers: GET http://localhost:5000/api/drivers
+- Update Driver KYC / Admin Approval: PATCH http://localhost:5000/api/drivers/:id/kyc
+  Body: { "kyc": "verified", "status": "active" }
+- Delete Driver: DELETE http://localhost:5000/api/drivers/:id
+
+================================================================================
+4. RIDES & CARPOOL BOOKING APIS
+================================================================================
+
+4.1 Create New Ride Listing (Driver)
+Endpoint: POST http://localhost:5000/api/rides
+Method: POST
+
+4.2 Book a Ride / Detour Booking (Customer)
+Endpoint: POST http://localhost:5000/api/rides/book
+Method: POST
+Body:
+{
+  "rideId": "RD-2002-827",
+  "pickup": "Visakhapatnam",
+  "destination": "Tirupati",
+  "boardingPoint": "Narasaraopeta Bus Stand",
+  "customerPickupAddress": "Billa Bus Stand Area, Narasaraopeta",
+  "customerPickupPincode": "522601",
+  "customerPickupLandmark": "Bilal biryani ponit",
+  "doorstepPickupRequested": true,
+  "perKmDetourRate": 5,
+  "detourDistanceKm": 97,
+  "extraPickupCharge": 485,
+  "pickupTime": "09:30 AM",
+  "fullName": "Sneha",
+  "phoneNumber": "+91 94567 89023",
+  "emailID": "sneha@gmail.com",
+  "numberOfSeats": 1,
+  "pricePerSeat": 550,
+  "luggage": "1 Medium Bag",
+  "paymentMethod": "UPI",
+  "totalAmount": 1035
+}
+================================================================================
