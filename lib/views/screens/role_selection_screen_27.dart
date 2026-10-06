@@ -39,10 +39,12 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
     final phone = widget.phoneNumber ?? '+91 98765 43210';
 
     // 🚀 Call Backend Mobile Login Step 3: Select Role & Obtain JWT Token (POST /api/auth/mobile/select-role)
-    await AuthService.selectRoleMobile(
+    final roleRes = await AuthService.selectRoleMobile(
       phone: phone,
       role: _selectedRole,
     );
+
+    final user = roleRes['user'] ?? (roleRes['data'] is Map ? roleRes['data']['user'] : null);
 
     setState(() {
       _isLoading = false;
@@ -58,10 +60,15 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
       );
     } else if (_selectedRole == 'Host') {
       // Dynamic host name resolution
-      final resolvedHostName = await AuthService.getUserName(phone: phone);
+      final resolvedHostName = (user != null && user['name'] != null && user['name'].toString().isNotEmpty)
+          ? user['name'].toString()
+          : await AuthService.getUserName(phone: phone);
 
       // Check approval status: Gated from dashboard until property is approved
-      final approval = await HostService.checkHostApprovalStatus(hostPhone: phone);
+      final approval = await HostService.checkHostApprovalStatus(
+        hostPhone: phone,
+        userProfile: user is Map<String, dynamic> ? user : (user is Map ? Map<String, dynamic>.from(user) : null),
+      );
 
       if (!mounted) return;
 

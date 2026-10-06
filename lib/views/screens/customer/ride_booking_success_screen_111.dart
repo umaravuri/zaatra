@@ -4,6 +4,7 @@ import '../../../models/ride_booking_model.dart';
 import '../../widgets/custom_button.dart';
 import 'customer_home_screen_38.dart';
 import 'live_ride_tracking_screen_106.dart';
+import 'ride_confirmed_detail_screen_112.dart';
 
 class RideBookingSuccessScreen extends StatelessWidget {
   final RideBookingSession? session;
@@ -13,11 +14,7 @@ class RideBookingSuccessScreen extends StatelessWidget {
     this.session,
   });
 
-  RideBookingSession get _activeSession =>
-      session ??
-      RideBookingSession(
-        driver: mockRideDrivers[0],
-      );
+  RideBookingSession get _activeSession => session ?? const RideBookingSession();
 
   @override
   Widget build(BuildContext context) {
@@ -103,7 +100,7 @@ class RideBookingSuccessScreen extends StatelessWidget {
                               decoration: BoxDecoration(
                                 color: const Color(0xFFF7F4FB),
                                 borderRadius: BorderRadius.circular(18),
-                                border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                                border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
                               ),
                               child: Column(
                                 children: [
@@ -185,20 +182,43 @@ class RideBookingSuccessScreen extends StatelessWidget {
                             const Spacer(),
                             const SizedBox(height: 16),
 
-                            // Primary CTA: View Tracking matching 111.png
+                            // Primary CTA: View Confirmed Ride Details (Screen 112)
                             CustomButton(
-                              text: 'View Live Tracking',
+                              text: 'View Ride Confirmation',
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => RideConfirmedDetailScreen112(session: active),
+                                  ),
+                                );
+                              },
+                            ),
+
+                            const SizedBox(height: 10),
+
+                            // Secondary CTA: View Live Tracking
+                            OutlinedButton(
                               onPressed: () {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(builder: (context) => const LiveRideTrackingScreen()),
                                 );
                               },
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size(double.infinity, 50),
+                                side: const BorderSide(color: AppColors.primary),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              child: const Text(
+                                'View Live Tracking',
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.primary),
+                              ),
                             ),
 
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 8),
 
-                            // Secondary CTA: Go To Home (Screen 38)
+                            // Tertiary CTA: Go To Dashboard (Screen 38)
                             TextButton(
                               onPressed: () {
                                 Navigator.pushAndRemoveUntil(
@@ -209,7 +229,7 @@ class RideBookingSuccessScreen extends StatelessWidget {
                               },
                               child: const Text(
                                 'Go To Dashboard',
-                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
                               ),
                             ),
 

@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
+import 'auth_service.dart';
 
 class HostService {
   // 1. Host KYC & Profile Registration API
@@ -279,9 +280,10 @@ class HostService {
       final matched = allFetched.where((p) {
         if (p is! Map) return false;
 
-        // Check hostId
-        if (hostId != null && hostId.isNotEmpty && p['hostId']?.toString() == hostId) {
-          return true;
+        // Check hostId / userId / host / owner
+        if (hostId != null && hostId.isNotEmpty) {
+          final pHostId = (p['hostId'] ?? p['userId'] ?? p['host'] ?? p['owner'] ?? p['createdBy'])?.toString();
+          if (pHostId == hostId) return true;
         }
 
         // Check phone
@@ -305,22 +307,51 @@ class HostService {
   }
 
   // 4. Check Host Approval Workflow State
-  // Determines whether host has:
-  // - No properties -> Become a Host Screen (Screen 28)
-  // - Pending properties (awaiting admin approval) -> Gated Thank You Screen
-  // - Approved properties (status is listed / approved / active / featured) -> Host Dashboard (Screen 37)
-  static Future<HostApprovalResult> checkHostApprovalStatus({String? hostId, String? hostPhone}) async {
+  // Checks BOTH user-level approval (Host KYC / Account) AND property-level approval
+  static Future<HostApprovalResult> checkHostApprovalStatus({
+    String? hostId,
+    String? hostPhone,
+    Map<String, dynamic>? userProfile,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final phoneToCheck = hostPhone ?? prefs.getString('currentPhone') ?? '';
     final cleanPhone = phoneToCheck.replaceAll(RegExp(r'[^0-9]'), '');
     final tenDigit = cleanPhone.length >= 10 ? cleanPhone.substring(cleanPhone.length - 10) : cleanPhone;
 
-    // Check local persistent approval override (e.g. if set by admin/local action)
-    if (cleanPhone.isNotEmpty) {
-      if (prefs.getBool('host_approved_$cleanPhone') == true || prefs.getBool('host_approved_$tenDigit') == true) {
+    // 1. Check User-Level Admin Approval (from provided profile or SharedPreferences session)
+    final user = userProfile ?? await AuthService.getCurrentUser();
+    if (user != null) {
+      final userStatus = (user['status'] ?? '').toString().toLowerCase();
+      final hostStatus = (user['hostStatus'] ?? user['hostApproval'] ?? user['kyc'] ?? user['kycStatus'] ?? '').toString().toLowerCase();
+      final isUserApproved = user['isApproved'] == true ||
+          user['adminApproval'] == true ||
+          userStatus == 'approved' ||
+          userStatus == 'active' ||
+          hostStatus == 'approved' ||
+          hostStatus == 'active' ||
+          hostStatus == 'verified';
+
+      if (isUserApproved) {
+        if (cleanPhone.isNotEmpty) {
+          await prefs.setBool('host_approved_$cleanPhone', true);
+        }
+        final properties = await getHostProperties(hostId: hostId, hostPhone: phoneToCheck);
         return HostApprovalResult(
           status: HostApprovalStatus.approved,
-          properties: [],
+          properties: properties,
+          approvedProperties: properties,
+        );
+      }
+    }
+
+    // 2. Check local persistent approval override
+    if (cleanPhone.isNotEmpty) {
+      if (prefs.getBool('host_approved_$cleanPhone') == true || prefs.getBool('host_approved_$tenDigit') == true) {
+        final properties = await getHostProperties(hostId: hostId, hostPhone: phoneToCheck);
+        return HostApprovalResult(
+          status: HostApprovalStatus.approved,
+          properties: properties,
+          approvedProperties: properties,
         );
       }
     }
@@ -343,12 +374,21 @@ class HostService {
       );
     }
 
-    // Check if at least one property is APPROVED by Admin
-    // (Mongoose Property model uses status: "listed" | "pending" | "PENDING_REVIEW" | "featured" | "approved" | "active")
+    // 3. Check if at least one property is APPROVED by Admin
+    // Supports boolean isApproved, adminApproval, approved, and case-insensitive status strings
     final approvedList = properties.where((p) {
       if (p is! Map) return false;
-      final status = (p['status'] ?? '').toString().toUpperCase();
-      return status == 'APPROVED' || status == 'LISTED' || status == 'ACTIVE' || status == 'FEATURED';
+      if (p['isApproved'] == true || p['adminApproval'] == true || p['approved'] == true) {
+        return true;
+      }
+      final status = (p['status'] ?? p['approvalStatus'] ?? '').toString().toUpperCase();
+      return status == 'APPROVED' ||
+          status == 'LISTED' ||
+          status == 'ACTIVE' ||
+          status == 'FEATURED' ||
+          status == 'VERIFIED' ||
+          status == 'PUBLISHED' ||
+          status == 'LIVE';
     }).toList();
 
     if (approvedList.isNotEmpty) {

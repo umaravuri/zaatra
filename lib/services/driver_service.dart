@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/config/app_env.dart';
 import 'api_service.dart';
 
 class DriverService {
@@ -25,7 +26,7 @@ class DriverService {
       'name': name,
       'email': email,
       'phone': phone,
-      'password': password ?? 'DriverSecretPassword123',
+      'password': password ?? AppEnv.defaultDriverPassword,
       'location': (location != null && location.isNotEmpty) ? location : 'MI Road, C-Scheme',
       'city': (city != null && city.isNotEmpty) ? city : 'Jaipur',
       'state': (state != null && state.isNotEmpty) ? state : 'Rajasthan',
@@ -242,19 +243,114 @@ class DriverService {
     }
   }
 
-  // 9. Driver Upcoming Rides List API (Mobile)
-  // Endpoint: GET /rides?status=scheduled (fallback to /drivers/upcoming-rides)
-  static Future<Map<String, dynamic>> getUpcomingRides() async {
+  // 9. Dedicated Driver Rides List API (Scoped by Driver & Tab)
+  // Endpoint: GET /api/drivers/:driverId/rides?tab=[active|upcoming|completed|cancelled]
+  static Future<Map<String, dynamic>> getDriverRides({
+    required String driverId,
+    String tab = 'active',
+  }) async {
     try {
-      final res = await ApiService.get('/rides?status=scheduled');
-      if (res['success'] == true && res['rides'] is List) {
+      final cleanDriverId = driverId.trim();
+      final cleanTab = tab.trim().toLowerCase();
+      final endpoint = '/drivers/$cleanDriverId/rides?tab=$cleanTab';
+
+      final res = await ApiService.get(endpoint);
+      if (res['success'] == true) {
+        return res;
+      }
+      return res;
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to fetch driver rides: $e',
+        'count': 0,
+        'rides': [],
+        'tabs': [],
+      };
+    }
+  }
+
+  /// Helper to resolve the authenticated driver ID from SharedPreferences or fallback sources
+  static Future<String> resolveCurrentDriverId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedId = prefs.getString('driverId') ??
+          prefs.getString('driver_id') ??
+          prefs.getString('currentDriverId') ??
+          prefs.getString('userId');
+      if (savedId != null && savedId.trim().isNotEmpty) {
+        return savedId.trim();
+      }
+
+      final currentPhone = prefs.getString('currentPhone') ?? '';
+      if (currentPhone.isNotEmpty) {
+        final statusRes = await getDriverApprovalStatus(phone: currentPhone);
+        if (statusRes['success'] == true && statusRes['driver'] != null) {
+          final driverObj = statusRes['driver'];
+          final id = driverObj['id'] ?? driverObj['_id'] ?? driverObj['driverId'];
+          if (id != null && id.toString().isNotEmpty) {
+            final strId = id.toString().trim();
+            await prefs.setString('driverId', strId);
+            return strId;
+          }
+        }
+      }
+
+      // Fallback to Dashboard Summary query
+      final summary = await getDashboardSummary();
+      if (summary['success'] == true) {
+        final profile = summary['driverProfile'] ?? summary['driver'] ?? summary;
+        if (profile is Map) {
+          final id = profile['driverId'] ?? profile['id'] ?? profile['_id'];
+          if (id != null && id.toString().isNotEmpty) {
+            final strId = id.toString().trim();
+            await prefs.setString('driverId', strId);
+            return strId;
+          }
+        }
+      }
+    } catch (_) {}
+
+    return 'DRV-MADHAV-001'; // Default active driver fallback
+  }
+
+  // 9b. Driver Upcoming Rides List API (Mobile Fallback)
+  // Endpoint: GET /drivers/upcoming-rides?driverId=:driverId&tab=:tab (fallback to /rides?status=scheduled)
+  static Future<Map<String, dynamic>> getUpcomingRides({String? driverId, String tab = 'upcoming'}) async {
+    try {
+      if (driverId != null && driverId.isNotEmpty) {
+        final scopedRes = await getDriverRides(driverId: driverId, tab: tab);
+        if (scopedRes['success'] == true && scopedRes['rides'] is List) {
+          return {
+            'success': true,
+            'upcomingRides': scopedRes['rides'],
+            'rides': scopedRes['rides'],
+          };
+        }
+      }
+
+      final queryParams = <String>[];
+      if (driverId != null && driverId.isNotEmpty) queryParams.add('driverId=${Uri.encodeComponent(driverId)}');
+      if (tab.isNotEmpty) queryParams.add('tab=${Uri.encodeComponent(tab)}');
+      final qs = queryParams.isNotEmpty ? '?${queryParams.join('&')}' : '';
+
+      var res = await ApiService.get('/drivers/upcoming-rides$qs');
+      if (res['success'] == true) {
+        return res;
+      }
+
+      final rideQuery = <String>['status=scheduled'];
+      if (driverId != null && driverId.isNotEmpty) rideQuery.add('driverId=${Uri.encodeComponent(driverId)}');
+      final rideQs = '?${rideQuery.join('&')}';
+
+      final fallbackRes = await ApiService.get('/rides$rideQs');
+      if (fallbackRes['success'] == true && fallbackRes['rides'] is List) {
         return {
           'success': true,
-          'upcomingRides': res['rides'],
-          'rides': res['rides'],
+          'upcomingRides': fallbackRes['rides'],
+          'rides': fallbackRes['rides'],
         };
       }
-      final fallbackRes = await ApiService.get('/drivers/upcoming-rides');
       return fallbackRes;
     } catch (e) {
       return {
@@ -483,7 +579,7 @@ class DriverService {
     }
   }
 
-  // 19. Get Driver Notifications API
+  // 19. Get Driver Notifications API (Generic)
   // Endpoint: GET /drivers/notifications or GET /notifications
   static Future<Map<String, dynamic>> getDriverNotifications({String? filter}) async {
     try {
@@ -501,4 +597,162 @@ class DriverService {
       };
     }
   }
+
+  // 20. Screen 99: Get Driver Notifications & Booking Requests by Tab
+  // Endpoint: GET /drivers/notifications?tab=booking_requests | confirmed | denied | other
+  static Future<Map<String, dynamic>> getDriverNotificationsByTab({required String tab}) async {
+    try {
+      final res = await ApiService.get('/drivers/notifications?tab=${Uri.encodeComponent(tab)}');
+      if (res['success'] == true) {
+        return res;
+      }
+      // Fallback
+      return await ApiService.get('/notifications?tab=${Uri.encodeComponent(tab)}');
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to fetch $tab tab data: $e',
+        'items': [],
+      };
+    }
+  }
+
+  // 21. Screen 99: Accept Booking Request
+  // Endpoint: POST /drivers/booking-requests/:bookingId/accept
+  static Future<Map<String, dynamic>> acceptBookingRequest({required String bookingId}) async {
+    try {
+      var res = await ApiService.post('/drivers/booking-requests/$bookingId/accept', {});
+      if (res['success'] != true) {
+        res = await ApiService.patch('/drivers/booking-requests/$bookingId/accept', {});
+      }
+      if (res['success'] != true) {
+        res = await ApiService.patch('/bookings/$bookingId/status', {'status': 'confirmed'});
+      }
+      return res;
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to accept booking: $e',
+      };
+    }
+  }
+
+  // 22. Screen 99: Decline Booking Request
+  // Endpoint: POST /drivers/booking-requests/:bookingId/decline
+  static Future<Map<String, dynamic>> declineBookingRequest({
+    required String bookingId,
+    String reason = 'Seat capacity full or route unavailable',
+  }) async {
+    try {
+      final body = {'reason': reason};
+      var res = await ApiService.post('/drivers/booking-requests/$bookingId/decline', body);
+      if (res['success'] != true) {
+        res = await ApiService.patch('/drivers/booking-requests/$bookingId/decline', body);
+      }
+      if (res['success'] != true) {
+        res = await ApiService.post('/drivers/booking-requests/$bookingId/deny', body);
+      }
+      if (res['success'] != true) {
+        res = await ApiService.patch('/bookings/$bookingId/status', {'status': 'cancelled'});
+      }
+      return res;
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to decline booking: $e',
+      };
+    }
+  }
+
+  // 23. Screen 99: View Booking Request Details
+  // Endpoint: GET /drivers/booking-requests/:bookingId
+  static Future<Map<String, dynamic>> getBookingRequestDetails({required String bookingId}) async {
+    try {
+      final res = await ApiService.get('/drivers/booking-requests/$bookingId');
+      if (res['success'] == true) {
+        return res;
+      }
+      return await ApiService.get('/drivers/bookings/$bookingId');
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to fetch booking details: $e',
+      };
+    }
+  }
+
+  // 24. Screen 82: Driver Fuel Share & Earnings History API
+  // Endpoint: GET /drivers/fuel-share?filter=...&startDate=...&endDate=...&page=...&limit=...&search=...
+  static Future<Map<String, dynamic>> getFuelShareHistory({
+    String filter = 'this_month',
+    String? startDate,
+    String? endDate,
+    int page = 1,
+    int limit = 5,
+    String? search,
+  }) async {
+    try {
+      final queryParams = <String>[];
+      if (filter.isNotEmpty) {
+        queryParams.add('filter=${Uri.encodeComponent(filter)}');
+      }
+      if (startDate != null && startDate.isNotEmpty) {
+        queryParams.add('startDate=${Uri.encodeComponent(startDate)}');
+      }
+      if (endDate != null && endDate.isNotEmpty) {
+        queryParams.add('endDate=${Uri.encodeComponent(endDate)}');
+      }
+      queryParams.add('page=$page');
+      queryParams.add('limit=$limit');
+      if (search != null && search.isNotEmpty) {
+        queryParams.add('search=${Uri.encodeComponent(search)}');
+      }
+
+      final qs = queryParams.isNotEmpty ? '?${queryParams.join('&')}' : '';
+      final res = await ApiService.get('/drivers/fuel-share$qs');
+      return res;
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to fetch fuel share history: $e',
+      };
+    }
+  }
+
+  // 25. Delete / Cancel Upcoming Ride API
+  // Endpoints: DELETE /rides/:id | DELETE /drivers/rides/:id | POST /rides/:id/cancel
+  static Future<Map<String, dynamic>> deleteRide(String rideId, {String? reason}) async {
+    try {
+      if (rideId.isEmpty) {
+        return {'success': false, 'message': 'Invalid ride ID.'};
+      }
+
+      // 1. Try primary REST DELETE /rides/:id
+      var res = await ApiService.delete('/rides/$rideId');
+      if (res['success'] == true) return res;
+
+      // 2. Try DELETE /drivers/rides/:id
+      res = await ApiService.delete('/drivers/rides/$rideId');
+      if (res['success'] == true) return res;
+
+      // 3. Try POST /rides/:id/cancel
+      res = await ApiService.post('/rides/$rideId/cancel', {
+        'reason': reason ?? 'Driver deleted upcoming ride',
+        'status': 'cancelled',
+      });
+      if (res['success'] == true) return res;
+
+      // 4. Try PATCH /rides/:id
+      res = await ApiService.patch('/rides/$rideId', {
+        'status': 'cancelled',
+      });
+      return res;
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to delete ride: $e',
+      };
+    }
+  }
 }
+

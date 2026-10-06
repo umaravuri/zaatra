@@ -1,15 +1,17 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../services/api_service.dart';
 import '../../../services/driver_service.dart';
+import 'driver_booking_requests_screen_99.dart';
 import 'driver_earnings_history_screen_82.dart';
 import 'driver_my_ride_screen_30.dart';
-import 'driver_notification_screen_85.dart';
 import 'driver_profile_settings_screen_87.dart';
 import 'driver_ride_management_screen_98.dart';
 import 'driver_ride_start_details_screen_88.dart';
 import 'driver_support_help_screen_86.dart';
-import 'driver_trip_history_screen_84.dart';
 import 'driver_trip_shared_screen_94.dart';
 
 class DriverHomeDashboardScreen83 extends StatefulWidget {
@@ -29,6 +31,10 @@ class _DriverHomeDashboardScreen83State extends State<DriverHomeDashboardScreen8
   String _driverPhone = '';
   bool _isOnline = true;
   int _currentNavIndex = 0;
+
+  // Profile Photo State (Fetched dynamically from GET APIs)
+  String? _profileImageUrl;
+  Uint8List? _profileImageBytes;
 
   // Dynamic Driver Statistics (defaults to '-' until loaded from API)
   String _ridesCount = '-';
@@ -65,6 +71,31 @@ class _DriverHomeDashboardScreen83State extends State<DriverHomeDashboardScreen8
     return 'Good Evening';
   }
 
+  String _formatImageUrl(String url) {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    final cleanBase = ApiService.baseUrl.replaceAll('/api', '');
+    final cleanPath = url.startsWith('/') ? url : '/$url';
+    return '$cleanBase$cleanPath';
+  }
+
+  void _parseAndSetAvatar(dynamic photoData) {
+    if (photoData == null) return;
+    final photoStr = photoData.toString().trim();
+    if (photoStr.isEmpty) return;
+
+    if (photoStr.startsWith('data:image') || photoStr.length > 300) {
+      try {
+        final base64Content = photoStr.contains(',') ? photoStr.split(',').last : photoStr;
+        _profileImageBytes = base64Decode(base64Content);
+        _profileImageUrl = null;
+        return;
+      } catch (_) {}
+    }
+    _profileImageUrl = photoStr;
+  }
+
   Future<void> _loadDriverProfile() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -85,10 +116,35 @@ class _DriverHomeDashboardScreen83State extends State<DriverHomeDashboardScreen8
         _name = savedName;
       }
 
+      // Load saved avatar cache
+      final savedAvatarBase64 = prefs.getString('driver_avatar_base64_$cleanDigits') ??
+          prefs.getString('user_avatar_base64_$cleanDigits');
+      if (savedAvatarBase64 != null && savedAvatarBase64.isNotEmpty) {
+        try {
+          _profileImageBytes = base64Decode(savedAvatarBase64);
+        } catch (_) {}
+      }
+      final savedPhoto = prefs.getString('driver_photo_$cleanDigits') ??
+          prefs.getString('profile_image_$cleanDigits') ??
+          prefs.getString('current_user_avatar');
+      if (savedPhoto != null && savedPhoto.isNotEmpty && _profileImageBytes == null) {
+        _profileImageUrl = savedPhoto;
+      }
+
       // 🚀 1. Fetch live Dashboard Summary API (GET /api/drivers/dashboard-summary)
       final summaryResult = await DriverService.getDashboardSummary();
       if (summaryResult['success'] == true) {
-        // Driver Profile
+        // Cache driverId if provided
+        final dynamic fetchedDriverId = summaryResult['driverId'] ??
+            (summaryResult['driverProfile'] is Map ? summaryResult['driverProfile']['driverId'] ?? summaryResult['driverProfile']['id'] : null);
+        if (fetchedDriverId != null && fetchedDriverId.toString().isNotEmpty) {
+          await prefs.setString('driverId', fetchedDriverId.toString());
+          if (cleanDigits.isNotEmpty) {
+            await prefs.setString('driver_id_$cleanDigits', fetchedDriverId.toString());
+          }
+        }
+
+        // Driver Profile & Avatar
         if (summaryResult['driverProfile'] is Map) {
           final profile = summaryResult['driverProfile'] as Map;
           if (profile['name'] != null && profile['name'].toString().isNotEmpty) {
@@ -96,6 +152,16 @@ class _DriverHomeDashboardScreen83State extends State<DriverHomeDashboardScreen8
           }
           if (profile['isOnline'] != null) {
             _isOnline = profile['isOnline'] == true;
+          }
+          final photo = profile['driverPhoto'] ??
+              profile['profilePicture'] ??
+              profile['avatar'] ??
+              profile['photo'] ??
+              profile['profilePhoto'] ??
+              profile['image'] ??
+              profile['profileImage'];
+          if (photo != null) {
+            _parseAndSetAvatar(photo);
           }
         }
 
@@ -116,9 +182,15 @@ class _DriverHomeDashboardScreen83State extends State<DriverHomeDashboardScreen8
               (upcoming['origin'] != null && upcoming['destination'] != null);
 
           if (hasRide) {
-            _upcomingOrigin = upcoming['origin']?.toString() ?? upcoming['pickupLocation']?.toString() ?? upcoming['from']?.toString() ?? '-';
+            _upcomingOrigin = upcoming['origin']?.toString() ??
+                upcoming['pickupLocation']?.toString() ??
+                upcoming['from']?.toString() ??
+                '-';
             _upcomingOriginTime = upcoming['departureTime']?.toString() ?? '-';
-            _upcomingDestination = upcoming['destination']?.toString() ?? upcoming['destinationLocation']?.toString() ?? upcoming['to']?.toString() ?? '-';
+            _upcomingDestination = upcoming['destination']?.toString() ??
+                upcoming['destinationLocation']?.toString() ??
+                upcoming['to']?.toString() ??
+                '-';
             _upcomingDestinationTime = upcoming['arrivalTime']?.toString() ?? '-';
             _upcomingDateStr = upcoming['dateDisplay']?.toString() ?? upcoming['date']?.toString() ?? '-';
             _upcomingRideId = upcoming['rideId']?.toString() ?? '';
@@ -152,7 +224,29 @@ class _DriverHomeDashboardScreen83State extends State<DriverHomeDashboardScreen8
         }
       }
 
-      // 🚀 2. Also check Upcoming Rides list if upcoming ride was not in summary
+      // 🚀 2. Fetch live Personal Info (GET /api/drivers/profile/personal) for latest photo
+      try {
+        final personalRes = await DriverService.getPersonalInfo(phone: currentPhone);
+        if (personalRes['success'] == true) {
+          final p = personalRes['personalInformation'] ?? personalRes['data'] ?? personalRes;
+          if (p is Map) {
+            if (p['fullName'] != null && p['fullName'].toString().isNotEmpty) {
+              _name = p['fullName'].toString();
+            }
+            final pPhoto = p['driverPhoto'] ??
+                p['profilePicture'] ??
+                p['avatar'] ??
+                p['photo'] ??
+                p['image'] ??
+                p['profileImage'];
+            if (pPhoto != null) {
+              _parseAndSetAvatar(pPhoto);
+            }
+          }
+        }
+      } catch (_) {}
+
+      // 🚀 3. Check Upcoming Rides list if upcoming ride was not in summary
       if (!_hasUpcomingRide) {
         final upcomingListResult = await DriverService.getUpcomingRides();
         if (upcomingListResult['success'] == true &&
@@ -169,13 +263,21 @@ class _DriverHomeDashboardScreen83State extends State<DriverHomeDashboardScreen8
         }
       }
 
-      // 🚀 3. Fallback to Driver Approval profile for name
+      // 🚀 4. Fallback to Driver Approval profile for name & photo
       if (cleanDigits.isNotEmpty && summaryResult['success'] != true) {
         final statusResult = await DriverService.getDriverApprovalStatus(phone: cleanDigits);
         if (statusResult['success'] == true && statusResult['driver'] != null) {
           final driver = statusResult['driver'];
           if (driver['name'] != null && driver['name'].toString().isNotEmpty) {
             _name = driver['name'].toString();
+          }
+          final dPhoto = driver['driverPhoto'] ??
+              driver['profilePicture'] ??
+              driver['avatar'] ??
+              driver['photo'] ??
+              driver['image'];
+          if (dPhoto != null && _profileImageUrl == null && _profileImageBytes == null) {
+            _parseAndSetAvatar(dPhoto);
           }
         }
       }
@@ -389,7 +491,7 @@ class _DriverHomeDashboardScreen83State extends State<DriverHomeDashboardScreen8
     );
   }
 
-  // 1. Purple Header with Avatar, Dynamic Greeting & Online Switch
+  // 1. Purple Header with Dynamic Profile Avatar, Dynamic Greeting & Online Switch
   Widget _buildHeaderSection() {
     return Container(
       width: double.infinity,
@@ -407,31 +509,31 @@ class _DriverHomeDashboardScreen83State extends State<DriverHomeDashboardScreen8
       ),
       child: Row(
         children: [
-          // Profile Avatar Circle
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Center(
-              child: Image.asset(
-                'assets/images/WhatsApp_Image_2026-07-30_at_9.42.30_PM-removebg-preview 2.png',
-                width: 36,
-                height: 36,
-                errorBuilder: (_, __, ___) => const Icon(
-                  Icons.person_rounded,
-                  color: AppColors.primary,
-                  size: 28,
-                ),
+          // Profile Avatar Circle (Tapable to Settings / Profile)
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const DriverProfileSettingsScreen()),
+              ).then((_) => _loadDriverProfile());
+            },
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: ClipOval(
+                child: _buildAvatarImage(),
               ),
             ),
           ),
@@ -502,6 +604,57 @@ class _DriverHomeDashboardScreen83State extends State<DriverHomeDashboardScreen8
         ],
       ),
     );
+  }
+
+  Widget _buildAvatarImage() {
+    if (_profileImageBytes != null) {
+      return Image.memory(
+        _profileImageBytes!,
+        width: 48,
+        height: 48,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _buildAvatarFallback(),
+      );
+    }
+
+    if (_profileImageUrl != null && _profileImageUrl!.isNotEmpty) {
+      return Image.network(
+        _formatImageUrl(_profileImageUrl!),
+        width: 48,
+        height: 48,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _buildAvatarFallback(),
+      );
+    }
+
+    return _buildAvatarFallback();
+  }
+
+  Widget _buildAvatarFallback() {
+    final initials = _getInitials(_name);
+    return Container(
+      width: 48,
+      height: 48,
+      color: const Color(0xFFF3EDF7),
+      alignment: Alignment.center,
+      child: Text(
+        initials,
+        style: const TextStyle(
+          color: AppColors.primary,
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  String _getInitials(String name) {
+    if (name.trim().isEmpty || name == 'Driver') return 'D';
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return name.substring(0, name.length >= 2 ? 2 : 1).toUpperCase();
   }
 
   // 2. Dynamic Top Metric Statistics Card
@@ -602,7 +755,7 @@ class _DriverHomeDashboardScreen83State extends State<DriverHomeDashboardScreen8
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const DriverNotificationScreen()),
+              MaterialPageRoute(builder: (context) => const DriverBookingRequestsScreen()),
             );
           },
         ),
@@ -968,7 +1121,9 @@ class _DriverHomeDashboardScreen83State extends State<DriverHomeDashboardScreen8
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const DriverTripHistoryScreen()),
+              MaterialPageRoute(
+                builder: (context) => const DriverRideManagementScreen(initialTabIndex: 2),
+              ),
             );
           },
         ),
@@ -979,7 +1134,9 @@ class _DriverHomeDashboardScreen83State extends State<DriverHomeDashboardScreen8
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const DriverRideManagementScreen()),
+              MaterialPageRoute(
+                builder: (context) => const DriverRideManagementScreen(initialTabIndex: 1),
+              ),
             );
           },
         ),
@@ -1009,7 +1166,9 @@ class _DriverHomeDashboardScreen83State extends State<DriverHomeDashboardScreen8
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const DriverTripHistoryScreen()),
+              MaterialPageRoute(
+                builder: (context) => const DriverRideManagementScreen(initialTabIndex: 2),
+              ),
             );
           },
         ),

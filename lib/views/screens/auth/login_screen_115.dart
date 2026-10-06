@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
@@ -287,10 +288,22 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString('authToken', token.toString());
       }
       if (user != null) {
-        await prefs.setString('userProfile', user.toString());
+        await prefs.setString('userProfile', jsonEncode(user));
         if (user['name'] != null && user['name'].toString().isNotEmpty) {
           await prefs.setString('currentUserName', user['name'].toString());
           await prefs.setString('user_name_$cleanDigits', user['name'].toString());
+        }
+        if (user['email'] != null && user['email'].toString().isNotEmpty) {
+          await prefs.setString('currentUserEmail', user['email'].toString());
+          await prefs.setString('user_email_$cleanDigits', user['email'].toString());
+        }
+        if (user['city'] != null && user['city'].toString().isNotEmpty) {
+          await prefs.setString('currentUserCity', user['city'].toString());
+          await prefs.setString('user_city_$cleanDigits', user['city'].toString());
+        }
+        if (user['location'] != null && user['location'].toString().isNotEmpty) {
+          await prefs.setString('currentUserLocation', user['location'].toString());
+          await prefs.setString('user_location_$cleanDigits', user['location'].toString());
         }
       }
       await prefs.setString('currentUserRole', role);
@@ -312,6 +325,7 @@ class _LoginScreenState extends State<LoginScreen> {
       hostApprovalResult = await HostService.checkHostApprovalStatus(
         hostId: hostId,
         hostPhone: matchedPhone,
+        userProfile: user is Map<String, dynamic> ? user : (user is Map ? Map<String, dynamic>.from(user) : null),
       );
     }
 
@@ -634,107 +648,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
 
               const SizedBox(height: 28),
-
-              // Divider matching Screen 115
-              Row(
-                children: const [
-                  Expanded(child: Divider(color: AppColors.border)),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: Text(
-                      'or continue with',
-                      style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                    ),
-                  ),
-                  Expanded(child: Divider(color: AppColors.border)),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // Social Auth & Registration Buttons
-              Row(
-                children: [
-                  // Gmail Auth Button
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Signing in with Gmail...')),
-                        );
-                      },
-                      child: Container(
-                        height: 54,
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Center(
-                          child: Image.asset(
-                            'assets/images/gmail.png',
-                            height: 28,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => const Icon(Icons.email_rounded, color: Colors.red, size: 26),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Facebook Auth Button
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Signing in with Facebook...')),
-                        );
-                      },
-                      child: Container(
-                        height: 54,
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: const Center(
-                          child: Icon(Icons.facebook_rounded, size: 28, color: Color(0xFF1877F2)),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // User Registration Button (reg.png)
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const UserRegistrationScreen()),
-                        );
-                      },
-                      child: Container(
-                        height: 54,
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Center(
-                          child: Image.asset(
-                            'assets/images/reg.png',
-                            height: 26,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => const Icon(Icons.person_add_alt_1_rounded, color: AppColors.primary, size: 26),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
 
               // Register Account Link
               Row(

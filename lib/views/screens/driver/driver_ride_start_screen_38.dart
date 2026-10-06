@@ -4,7 +4,7 @@ import '../../widgets/custom_button.dart';
 import 'driver_on_trip_screen_39.dart';
 
 class DriverRideStartScreen extends StatelessWidget {
-  const DriverRideStartScreen({Key? key}) : super(key: key);
+  const DriverRideStartScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +45,7 @@ class DriverRideStartScreen extends StatelessWidget {
           padding: const EdgeInsets.all(20.0),
           child: Column(
             children: [
-              // Route & Date Header Card matching Image 4
+              // Route & Date Header Card
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -57,9 +57,9 @@ class DriverRideStartScreen extends StatelessWidget {
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                  children: const [
                     Row(
-                      children: const [
+                      children: [
                         Text('Madhapur', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                         SizedBox(width: 10),
                         Icon(Icons.arrow_forward_rounded, size: 16, color: AppColors.textMuted),
@@ -67,38 +67,38 @@ class DriverRideStartScreen extends StatelessWidget {
                         Text('Secundrabad', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    const Text('20 May 2024 - 09 : 00 AM', style: TextStyle(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+                    SizedBox(height: 6),
+                    Text('20 May 2024 - 09 : 00 AM', style: TextStyle(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
                   ],
                 ),
               ),
 
               const SizedBox(height: 20),
 
-              // Pickup location badge matching Image 4
+              // Pickup location badge
               _buildLocationBadge('Pickup location', 'Madhapur , Hyderabad', const Color(0xFF4CAF50)),
 
               const SizedBox(height: 12),
 
-              // Destination badge matching Image 4
+              // Destination badge
               _buildLocationBadge('Destination', 'Secundrabad', const Color(0xFFE53935)),
 
               const SizedBox(height: 20),
 
-              // Passengers Boarded Header matching Image 4
-              Row(
+              // Passengers Boarded Header
+              const Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
+                children: [
                   Text('Passengers', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                  Text('3/3 Boarded', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+                  Text('No passengers boarded', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
                 ],
               ),
 
               const SizedBox(height: 12),
 
-              // Live Navigation Map Box matching Image 4
+              // Live Navigation Map Box
               Container(
-                height: 320,
+                height: 220,
                 width: double.infinity,
                 decoration: BoxDecoration(
                   color: const Color(0xFFE8DEF8),
@@ -122,16 +122,59 @@ class DriverRideStartScreen extends StatelessWidget {
                 ),
               ),
 
-              const SizedBox(height: 28),
+              const SizedBox(height: 24),
 
-              // Start Navigations CTA Button matching Image 4
+              // 1. Share Trip Card Button
               CustomButton(
-                text: 'Start Navigations',
+                text: 'Share Trip Card',
+                isOutlined: true,
+                backgroundColor: const Color(0xFFF3EDF7),
+                textColor: AppColors.primary,
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Trip card shared successfully!')),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 12),
+
+              // 2. Start Ride Button
+              CustomButton(
+                text: 'Start Ride',
+                backgroundColor: AppColors.primary,
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Ride started!')),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 12),
+
+              // 3. Start Navigation Button
+              CustomButton(
+                text: 'Start Navigation',
+                backgroundColor: const Color(0xFF4CAF50),
+                textColor: Colors.white,
                 onPressed: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => const DriverOnTripScreen()),
                   );
+                },
+              ),
+
+              const SizedBox(height: 12),
+
+              // 4. Complete Ride Button
+              CustomButton(
+                text: 'Complete Ride',
+                isOutlined: true,
+                backgroundColor: Colors.white,
+                textColor: AppColors.primary,
+                onPressed: () {
+                  Navigator.pop(context);
                 },
               ),
             ],

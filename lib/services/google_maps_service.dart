@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../core/config/app_env.dart';
 import '../models/place_location_model.dart';
 
 class GoogleMapsService {
-  static const String apiKey = 'AIzaSyBeecni1nLIOjHAWCb3Jof73kI1IeIyz2o';
+  /// Google Maps Places & Directions API Key from AppEnv
+  static String get apiKey => AppEnv.googleMapsApiKey;
 
   static const String _autocompleteBaseUrl = 'https://maps.googleapis.com/maps/api/place/autocomplete/json';
   static const String _placeDetailsBaseUrl = 'https://maps.googleapis.com/maps/api/place/details/json';
@@ -99,6 +101,73 @@ class GoogleMapsService {
       debugPrint('Error calling Google Directions API: $e');
     }
     return null;
+  }
+
+  /// 4. Reverse Geocoding API (Live Google Geocoding API)
+  /// Endpoint: GET https://maps.googleapis.com/maps/api/geocode/json
+  static Future<LocationPoint?> reverseGeocode(double lat, double lng) async {
+    try {
+      final url = Uri.parse('https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$apiKey');
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final results = data['results'] as List<dynamic>? ?? [];
+        if (results.isNotEmpty) {
+          final first = results.first as Map<String, dynamic>;
+          final formatted = first['formatted_address']?.toString() ?? '';
+          final placeId = first['place_id']?.toString() ?? '';
+          return LocationPoint(
+            name: formatted.split(',').first,
+            formattedAddress: formatted,
+            latitude: lat,
+            longitude: lng,
+            placeId: placeId,
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error reverse geocoding: $e');
+    }
+    return null;
+  }
+
+  /// 5. Live Device / Current Location Resolver
+  static Future<LocationPoint?> getCurrentLocation() async {
+    try {
+      final ipUrl = Uri.parse('http://ip-api.com/json');
+      final res = await http.get(ipUrl).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 200) {
+        final ipData = jsonDecode(res.body) as Map<String, dynamic>;
+        if (ipData['status'] == 'success') {
+          final lat = (ipData['lat'] as num?)?.toDouble() ?? 17.4486;
+          final lon = (ipData['lon'] as num?)?.toDouble() ?? 78.3908;
+          final city = ipData['city']?.toString() ?? 'Hyderabad';
+          final region = ipData['regionName']?.toString() ?? 'Telangana';
+          final country = ipData['country']?.toString() ?? 'India';
+
+          final geoPoint = await reverseGeocode(lat, lon);
+          if (geoPoint != null && geoPoint.formattedAddress.isNotEmpty) {
+            return geoPoint;
+          }
+
+          return LocationPoint(
+            name: '$city, $region',
+            formattedAddress: '$city, $region, $country',
+            latitude: lat,
+            longitude: lon,
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching current location: $e');
+    }
+
+    return const LocationPoint(
+      name: 'Current Location',
+      formattedAddress: 'Hitech City, Madhapur, Hyderabad, Telangana, India',
+      latitude: 17.4486,
+      longitude: 78.3908,
+    );
   }
 }
 

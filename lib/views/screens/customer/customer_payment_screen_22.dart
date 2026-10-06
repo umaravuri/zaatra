@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../models/booking_model.dart';
 import '../../../models/ride_option_model.dart';
 import '../../widgets/custom_button.dart';
-import 'customer_ride_tracking_screen_23.dart';
+import 'ride_confirmed_detail_screen_112.dart';
 
 class CustomerPaymentScreen extends StatefulWidget {
   final String pickupAddress;
@@ -11,11 +10,11 @@ class CustomerPaymentScreen extends StatefulWidget {
   final RideOptionModel? selectedRide;
 
   const CustomerPaymentScreen({
-    Key? key,
+    super.key,
     this.pickupAddress = 'Madhapur, Hitech City',
     this.dropoffAddress = 'Gachibowli, Hyderabad',
     this.selectedRide,
-  }) : super(key: key);
+  });
 
   @override
   State<CustomerPaymentScreen> createState() => _CustomerPaymentScreenState();
@@ -55,19 +54,10 @@ class _CustomerPaymentScreenState extends State<CustomerPaymentScreen> {
         _isLoading = false;
       });
 
-      final booking = BookingModel.createSample(
-        pickup: widget.pickupAddress,
-        dropoff: widget.dropoffAddress,
-        ride: _ride,
-        payment: _selectedPaymentMethod,
-        discount: _discount,
-        promo: _promoController.text,
-      );
-
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => CustomerRideTrackingScreen(booking: booking),
+          builder: (context) => const RideConfirmedDetailScreen112(),
         ),
       );
     }

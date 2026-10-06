@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../models/intermediate_pickup_model.dart';
 import '../../../models/place_location_model.dart';
+import '../../../models/ride_booking_model.dart';
+import '../../../services/ride_service.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/location_autocomplete_picker_modal.dart';
 import 'driver_route_preview_screen_32.dart';
@@ -19,9 +21,14 @@ class DriverIntermediatePickupsScreen extends StatefulWidget {
   final String? seats;
   final String? fare;
   final String? luggage;
+  final double? basePricePerKm;
+  final double? pricePerSeat;
+  final bool? offerDoorstepPickupDrop;
+  final double? detourRadiusKm;
+  final double? detourRatePerKm;
 
   const DriverIntermediatePickupsScreen({
-    Key? key,
+    super.key,
     this.pickup,
     this.destination,
     this.route,
@@ -31,7 +38,12 @@ class DriverIntermediatePickupsScreen extends StatefulWidget {
     this.seats,
     this.fare,
     this.luggage,
-  }) : super(key: key);
+    this.basePricePerKm,
+    this.pricePerSeat,
+    this.offerDoorstepPickupDrop,
+    this.detourRadiusKm,
+    this.detourRatePerKm,
+  });
 
   @override
   State<DriverIntermediatePickupsScreen> createState() => _DriverIntermediatePickupsScreenState();
@@ -40,35 +52,27 @@ class DriverIntermediatePickupsScreen extends StatefulWidget {
 /// Helper controller container for managing dynamic intermediate pickup cards
 class _PickupCardControllers {
   final TextEditingController locationController;
-  final TextEditingController pinCodeController;
-  final TextEditingController landmarkController;
   final TextEditingController priceController;
   String? selectedTime;
   LocationPoint? resolvedLocation;
+  String? suggestedFareText;
+  double? suggestedPrice;
 
   _PickupCardControllers({
     String initialLocation = '',
-    String initialPinCode = '',
-    String initialLandmark = '',
     String initialPrice = '',
     this.selectedTime,
   })  : locationController = TextEditingController(text: initialLocation),
-        pinCodeController = TextEditingController(text: initialPinCode),
-        landmarkController = TextEditingController(text: initialLandmark),
         priceController = TextEditingController(text: initialPrice);
 
   void dispose() {
     locationController.dispose();
-    pinCodeController.dispose();
-    landmarkController.dispose();
     priceController.dispose();
   }
 
   IntermediatePickupModel toModel() {
     return IntermediatePickupModel(
       location: locationController.text.trim(),
-      pinCode: pinCodeController.text.trim(),
-      landmark: landmarkController.text.trim().isNotEmpty ? landmarkController.text.trim() : null,
       time: selectedTime ?? '',
       price: priceController.text.trim(),
       locationPoint: resolvedLocation,
@@ -80,10 +84,24 @@ class _DriverIntermediatePickupsScreenState extends State<DriverIntermediatePick
   final _formKey = GlobalKey<FormState>();
   final ScrollController _scrollController = ScrollController();
   final List<_PickupCardControllers> _pickups = [];
+  bool _isCalculatingFares = false;
+  IntermediateFareResult? _fareResult;
+
+  // Offer Doorstep Pickup & Drop State
+  bool _offerDoorstep = false;
+  final TextEditingController _detourRadiusController = TextEditingController();
+  final TextEditingController _detourRateController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _offerDoorstep = widget.offerDoorstepPickupDrop ?? false;
+    if (widget.detourRadiusKm != null && widget.detourRadiusKm! > 0) {
+      _detourRadiusController.text = widget.detourRadiusKm.toString().replaceAll(RegExp(r'\.0$'), '');
+    }
+    if (widget.detourRatePerKm != null && widget.detourRatePerKm! > 0) {
+      _detourRateController.text = widget.detourRatePerKm.toString().replaceAll(RegExp(r'\.0$'), '');
+    }
     // Initialize with 1 intermediate pickup card
     _addNewPickup(scrollToBottom: false);
   }
@@ -93,6 +111,8 @@ class _DriverIntermediatePickupsScreenState extends State<DriverIntermediatePick
     for (final card in _pickups) {
       card.dispose();
     }
+    _detourRadiusController.dispose();
+    _detourRateController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -133,6 +153,7 @@ class _DriverIntermediatePickupsScreenState extends State<DriverIntermediatePick
       final removed = _pickups.removeAt(index);
       removed.dispose();
     });
+    _autoCalculateFares();
   }
 
   Future<void> _pickLocationForCard(int index) async {
@@ -146,6 +167,58 @@ class _DriverIntermediatePickupsScreenState extends State<DriverIntermediatePick
       setState(() {
         _pickups[index].locationController.text = picked.name;
         _pickups[index].resolvedLocation = picked;
+      });
+      _autoCalculateFares();
+    }
+  }
+
+  Future<void> _autoCalculateFares() async {
+    final from = widget.pickup?.name ?? (widget.route?.startAddress.isNotEmpty == true ? widget.route!.startAddress : 'Origin');
+    final to = widget.destination?.name ?? (widget.route?.endAddress.isNotEmpty == true ? widget.route!.endAddress : 'Destination');
+    final basePrice = double.tryParse(widget.fare?.replaceAll(RegExp(r'[^0-9.]'), '') ?? '') ?? 500.0;
+
+    final stopsPayload = _pickups
+        .where((p) => p.locationController.text.trim().isNotEmpty)
+        .map((p) => {'location': p.locationController.text.trim()})
+        .toList();
+
+    if (stopsPayload.isEmpty) return;
+
+    setState(() => _isCalculatingFares = true);
+
+    final res = await RideService.calculateIntermediateFares(
+      from: from,
+      to: to,
+      price: basePrice,
+      intermediatePickups: stopsPayload,
+    );
+
+    if (mounted) {
+      setState(() {
+        _isCalculatingFares = false;
+        if (res['success'] == true) {
+          _fareResult = IntermediateFareResult.fromJson(res);
+          for (int i = 0; i < _pickups.length; i++) {
+            final cardLoc = _pickups[i].locationController.text.trim().toLowerCase();
+            if (cardLoc.isEmpty) continue;
+
+            final matched = _fareResult!.intermediatePickups.firstWhere(
+              (stop) => stop.location.toLowerCase() == cardLoc || cardLoc.contains(stop.location.toLowerCase()),
+              orElse: () => (i < _fareResult!.intermediatePickups.length)
+                  ? _fareResult!.intermediatePickups[i]
+                  : const IntermediateStopFare(),
+            );
+
+            if (matched.price > 0 || matched.suggestedPriceToDestination > 0) {
+              final targetPrice = matched.price > 0 ? matched.price : matched.suggestedPriceToDestination;
+              _pickups[i].suggestedPrice = targetPrice;
+              _pickups[i].suggestedFareText = matched.amountText.isNotEmpty ? matched.amountText : '₹ ${targetPrice.toInt()}';
+              if (_pickups[i].priceController.text.trim().isEmpty) {
+                _pickups[i].priceController.text = targetPrice.toInt().toString();
+              }
+            }
+          }
+        }
       });
     }
   }
@@ -184,7 +257,6 @@ class _DriverIntermediatePickupsScreenState extends State<DriverIntermediatePick
     bool hasAnyEntry = false;
     for (final card in _pickups) {
       if (card.locationController.text.trim().isNotEmpty ||
-          card.pinCodeController.text.trim().isNotEmpty ||
           card.priceController.text.trim().isNotEmpty) {
         hasAnyEntry = true;
         break;
@@ -243,6 +315,35 @@ class _DriverIntermediatePickupsScreenState extends State<DriverIntermediatePick
     };
     debugPrint('Intermediate Pickups Ready for POST API: $structuredPayload');
 
+    if (_offerDoorstep) {
+      final detourRadius = double.tryParse(_detourRadiusController.text.trim()) ?? 0;
+      if (_detourRadiusController.text.trim().isEmpty || detourRadius <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter detour radius (km).'),
+            backgroundColor: Colors.redAccent,
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+
+      final detourRate = double.tryParse(_detourRateController.text.trim()) ?? 0;
+      if (_detourRateController.text.trim().isEmpty || detourRate <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter detour rate (Rs/km).'),
+            backgroundColor: Colors.redAccent,
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+    }
+
+    final detourRadiusVal = _offerDoorstep ? (double.tryParse(_detourRadiusController.text.trim()) ?? 0.0) : 0.0;
+    final detourRateVal = _offerDoorstep ? (double.tryParse(_detourRateController.text.trim()) ?? 0.0) : 0.0;
+
     // Forward seamlessly to Route Preview Screen (Screen 32)
     Navigator.push(
       context,
@@ -257,6 +358,11 @@ class _DriverIntermediatePickupsScreenState extends State<DriverIntermediatePick
           seats: widget.seats,
           fare: widget.fare,
           luggage: widget.luggage,
+          basePricePerKm: widget.basePricePerKm,
+          pricePerSeat: widget.pricePerSeat,
+          offerDoorstepPickupDrop: _offerDoorstep,
+          detourRadiusKm: detourRadiusVal,
+          detourRatePerKm: detourRateVal,
           intermediatePickups: validPickups,
         ),
       ),
@@ -312,16 +418,25 @@ class _DriverIntermediatePickupsScreenState extends State<DriverIntermediatePick
                     decoration: BoxDecoration(
                       color: const Color(0xFFF3EDF7),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
                     ),
                     child: Row(
-                      children: const [
-                        Icon(Icons.alt_route_rounded, color: AppColors.primary, size: 22),
-                        SizedBox(width: 12),
+                      children: [
+                        if (_isCalculatingFares)
+                          const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                          )
+                        else
+                          const Icon(Icons.alt_route_rounded, color: AppColors.primary, size: 22),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Add pickup points along your route to pick up more passengers and earn extra.',
-                            style: TextStyle(
+                            _isCalculatingFares
+                                ? 'Calculating suggested fares based on route distance...'
+                                : 'Add pickup points along your route to pick up more passengers and earn extra.',
+                            style: const TextStyle(
                               fontSize: 13,
                               color: AppColors.textPrimary,
                               fontWeight: FontWeight.w500,
@@ -354,9 +469,9 @@ class _DriverIntermediatePickupsScreenState extends State<DriverIntermediatePick
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(color: AppColors.primary, width: 1.5),
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
+                        children: [
                           Icon(Icons.add_circle_outline_rounded, color: AppColors.primary, size: 20),
                           SizedBox(width: 8),
                           Text(
@@ -372,6 +487,11 @@ class _DriverIntermediatePickupsScreenState extends State<DriverIntermediatePick
                     ),
                   ),
 
+                  const SizedBox(height: 16),
+
+                  // 🚗 Offer Doorstep Pickup & Drop Card (Dynamically positioned below pickups)
+                  _buildDoorstepCard(),
+
                   const SizedBox(height: 28),
 
                   // Bottom Continue Button
@@ -384,6 +504,178 @@ class _DriverIntermediatePickupsScreenState extends State<DriverIntermediatePick
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDoorstepCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFA),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _offerDoorstep ? AppColors.primary.withValues(alpha: 0.3) : AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Offer Doorstep Pickup & Drop',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Allow passengers pickup/drop at their doorstep',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              Transform.scale(
+                scale: 0.85,
+                child: Switch.adaptive(
+                  value: _offerDoorstep,
+                  activeTrackColor: AppColors.primary,
+                  activeThumbColor: Colors.white,
+                  onChanged: (val) {
+                    setState(() {
+                      _offerDoorstep = val;
+                      if (_offerDoorstep) {
+                        if (_detourRadiusController.text.trim().isEmpty) {
+                          _detourRadiusController.text = '5';
+                        }
+                        if (_detourRateController.text.trim().isEmpty) {
+                          _detourRateController.text = '15';
+                        }
+                      }
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              // Detour radius (km)
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _offerDoorstep ? Colors.white : const Color(0xFFEEEEEE),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _offerDoorstep ? AppColors.border : Colors.grey.shade300),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Detour radius (km)',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: _offerDoorstep ? AppColors.textSecondary : Colors.grey.shade500,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      TextField(
+                        controller: _detourRadiusController,
+                        enabled: _offerDoorstep,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: _offerDoorstep ? AppColors.textPrimary : Colors.grey.shade500,
+                        ),
+                        decoration: InputDecoration(
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 2),
+                          hintText: 'e.g. 5',
+                          hintStyle: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.normal,
+                            color: _offerDoorstep ? AppColors.textSecondary : Colors.grey.shade400,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Detour rate (Rs/km)
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _offerDoorstep ? Colors.white : const Color(0xFFEEEEEE),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _offerDoorstep ? AppColors.border : Colors.grey.shade300),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Detour rate (Rs/km)',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: _offerDoorstep ? AppColors.textSecondary : Colors.grey.shade500,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Text(
+                            '₹ ',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: _offerDoorstep ? AppColors.textPrimary : Colors.grey.shade500,
+                            ),
+                          ),
+                          Expanded(
+                            child: TextField(
+                              controller: _detourRateController,
+                              enabled: _offerDoorstep,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: _offerDoorstep ? AppColors.textPrimary : Colors.grey.shade500,
+                              ),
+                              decoration: InputDecoration(
+                                border: InputBorder.none,
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(vertical: 2),
+                                hintText: 'e.g. 15',
+                                hintStyle: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.normal,
+                                  color: _offerDoorstep ? AppColors.textSecondary : Colors.grey.shade400,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -447,92 +739,39 @@ class _DriverIntermediatePickupsScreenState extends State<DriverIntermediatePick
 
           const SizedBox(height: 14),
 
-          // 1. Location Field
+          // 1. Location Field (Tap to open Autocomplete Search)
           _buildFieldLabel('Location'),
           const SizedBox(height: 6),
-          TextFormField(
-            controller: card.locationController,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-            decoration: InputDecoration(
-              hintText: 'Enter pickup location',
-              hintStyle: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
-              prefixIcon: const Icon(Icons.location_on_rounded, color: Color(0xFF4CAF50), size: 20),
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.search_rounded, color: AppColors.primary, size: 20),
-                onPressed: () => _pickLocationForCard(index),
+          InkWell(
+            onTap: () => _pickLocationForCard(index),
+            borderRadius: BorderRadius.circular(12),
+            child: IgnorePointer(
+              child: TextFormField(
+                controller: card.locationController,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  hintText: 'Search or select pickup location',
+                  hintStyle: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                  prefixIcon: const Icon(Icons.location_on_rounded, color: Color(0xFF4CAF50), size: 20),
+                  suffixIcon: const Icon(Icons.search_rounded, color: AppColors.primary, size: 20),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+                ),
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) {
+                    return 'Please enter pickup location';
+                  }
+                  return null;
+                },
               ),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
-            ),
-            validator: (val) {
-              if (val == null || val.trim().isEmpty) {
-                return 'Please enter pickup location';
-              }
-              return null;
-            },
-          ),
-
-          const SizedBox(height: 12),
-
-          // 2. PIN Code Field (Numeric, 6 Digits)
-          _buildFieldLabel('PIN Code'),
-          const SizedBox(height: 6),
-          TextFormField(
-            controller: card.pinCodeController,
-            keyboardType: TextInputType.number,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(6),
-            ],
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-            decoration: InputDecoration(
-              hintText: 'Enter PIN code',
-              hintStyle: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
-              prefixIcon: const Icon(Icons.pin_drop_outlined, color: AppColors.primary, size: 20),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
-            ),
-            validator: (val) {
-              if (val == null || val.trim().isEmpty) {
-                return 'Please enter PIN code';
-              }
-              if (val.trim().length != 6) {
-                return 'PIN code must be exactly 6 digits';
-              }
-              return null;
-            },
-          ),
-
-          const SizedBox(height: 12),
-
-          // 3. Landmark Field (Optional)
-          _buildFieldLabel('Landmark (Optional)', isOptional: true),
-          const SizedBox(height: 6),
-          TextFormField(
-            controller: card.landmarkController,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-            decoration: InputDecoration(
-              hintText: 'Enter landmark',
-              hintStyle: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
-              prefixIcon: const Icon(Icons.flag_outlined, color: AppColors.textSecondary, size: 20),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
             ),
           ),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
           // 4. Time & Price Row
           Row(
@@ -585,7 +824,18 @@ class _DriverIntermediatePickupsScreenState extends State<DriverIntermediatePick
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildFieldLabel('Price'),
+                    Row(
+                      children: [
+                        _buildFieldLabel('Price'),
+                        if (card.suggestedFareText != null && card.suggestedFareText!.isNotEmpty) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            '(${card.suggestedFareText})',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
+                          ),
+                        ],
+                      ],
+                    ),
                     const SizedBox(height: 6),
                     TextFormField(
                       controller: card.priceController,
@@ -626,7 +876,7 @@ class _DriverIntermediatePickupsScreenState extends State<DriverIntermediatePick
     );
   }
 
-  Widget _buildFieldLabel(String label, {bool isOptional = false}) {
+  Widget _buildFieldLabel(String label) {
     return Row(
       children: [
         Text(

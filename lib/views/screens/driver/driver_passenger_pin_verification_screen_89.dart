@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../models/ride_booking_model.dart';
 import '../../../services/ride_service.dart';
 import '../../widgets/custom_button.dart';
-import 'driver_on_trip_seats_screen_91.dart';
 import 'driver_wrong_pin_screen_90.dart';
 
 class DriverPassengerPinVerificationScreen extends StatefulWidget {
@@ -23,7 +23,7 @@ class DriverPassengerPinVerificationScreen extends StatefulWidget {
     this.passengerName = 'Passenger',
     this.pickupLocation = 'Madhapur',
     this.dropoffLocation = 'Secunderabad',
-    this.expectedPin = '849201',
+    this.expectedPin = '8492',
     this.totalSeats = 4,
     this.bookedSeats = const [1, 2, 3],
     this.boardingSeat = 2,
@@ -34,9 +34,33 @@ class DriverPassengerPinVerificationScreen extends StatefulWidget {
 }
 
 class _DriverPassengerPinVerificationScreenState extends State<DriverPassengerPinVerificationScreen> {
-  final List<TextEditingController> _controllers = List.generate(6, (index) => TextEditingController());
-  final List<FocusNode> _focusNodes = List.generate(6, (index) => FocusNode());
+  final List<TextEditingController> _controllers = List.generate(4, (index) => TextEditingController());
+  final List<FocusNode> _focusNodes = List.generate(4, (index) => FocusNode());
   bool _isLoading = false;
+  PassengerBoardingVerifyDetails? _verifyDetails;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVerifyDetails();
+  }
+
+  Future<void> _loadVerifyDetails() async {
+    final bId = widget.bookingId ?? '';
+    if (bId.isEmpty) return;
+
+    final res = await RideService.getPassengerVerifyDetails(
+      rideId: widget.rideId,
+      bookingId: bId,
+      passengerName: widget.passengerName,
+    );
+
+    if (mounted && res['success'] == true) {
+      setState(() {
+        _verifyDetails = PassengerBoardingVerifyDetails.fromJson(res);
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -54,10 +78,10 @@ class _DriverPassengerPinVerificationScreenState extends State<DriverPassengerPi
   Future<void> _handleVerifyPin() async {
     final enteredPin = _currentEnteredPin;
 
-    if (enteredPin.length < 6) {
+    if (enteredPin.length < 4) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter the full 6-digit passenger boarding PIN.'),
+          content: Text('Please enter the full 4-digit passenger boarding PIN.'),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -71,16 +95,17 @@ class _DriverPassengerPinVerificationScreenState extends State<DriverPassengerPi
         rideId: widget.rideId,
         bookingId: widget.bookingId,
         pin: enteredPin,
-        expectedPin: widget.expectedPin,
+        expectedPin: _verifyDetails?.expectedPin ?? widget.expectedPin,
       );
 
       if (!mounted) return;
       setState(() => _isLoading = false);
 
       if (res['success'] == true) {
+        final pName = _verifyDetails?.passengerName ?? widget.passengerName;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${widget.passengerName} verified and boarded successfully! 🎉'),
+            content: Text('$pName verified and boarded successfully! 🎉'),
             backgroundColor: AppColors.success,
             duration: const Duration(seconds: 2),
           ),
@@ -94,15 +119,16 @@ class _DriverPassengerPinVerificationScreenState extends State<DriverPassengerPi
           MaterialPageRoute(
             builder: (context) => DriverWrongPinScreen(
               initialWrongPin: enteredPin,
-              passengerName: widget.passengerName,
+              passengerName: _verifyDetails?.passengerName ?? widget.passengerName,
               rideId: widget.rideId,
-              expectedPin: widget.expectedPin,
+              bookingId: widget.bookingId,
+              seatNumber: _verifyDetails?.seatNumber.isNotEmpty == true ? _verifyDetails!.seatNumber : 'S-${widget.boardingSeat}',
+              expectedPin: _verifyDetails?.expectedPin ?? widget.expectedPin,
             ),
           ),
         );
 
         if (result == true && mounted) {
-          // Successfully verified in Screen 90 -> pop back to Screen 88
           Navigator.pop(context, true);
         }
       }
@@ -118,8 +144,159 @@ class _DriverPassengerPinVerificationScreenState extends State<DriverPassengerPi
     }
   }
 
+  Future<void> _handleVerifyQrPass() async {
+    final qrTokenController = TextEditingController();
+
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      backgroundColor: Colors.white,
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Row(
+                children: [
+                  Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary, size: 26),
+                  SizedBox(width: 10),
+                  Text(
+                    'Contactless QR Pass',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Enter passenger QR Pass token or scan QR code:',
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: qrTokenController,
+                autofocus: true,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  hintText: 'e.g. ZAATRA-PASS-66129...',
+                  hintStyle: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+                  prefixIcon: const Icon(Icons.qr_code, color: AppColors.primary),
+                  filled: true,
+                  fillColor: const Color(0xFFF7F5FE),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () {
+                        final token = qrTokenController.text.trim();
+                        if (token.isEmpty) return;
+                        Navigator.pop(ctx, token);
+                      },
+                      child: const Text('Verify Pass', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (result == null || result.isEmpty) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final res = await RideService.verifyQrPass(
+        token: result,
+        bookingId: widget.bookingId,
+        rideId: widget.rideId,
+      );
+
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      if (res['success'] == true) {
+        final pName = res['customerName']?.toString() ?? widget.passengerName;
+        final seat = res['seatNumber']?.toString() ?? '${widget.boardingSeat}';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎉 $pName verified via QR Pass! Boarded in seat $seat'),
+            backgroundColor: AppColors.success,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        Navigator.pop(context, true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message']?.toString() ?? 'Invalid QR Pass token.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final pName = _verifyDetails?.passengerName ?? widget.passengerName;
+    final fromLoc = _verifyDetails?.pickupLocation.isNotEmpty == true ? _verifyDetails!.pickupLocation : widget.pickupLocation;
+    final toLoc = _verifyDetails?.dropoffLocation.isNotEmpty == true ? _verifyDetails!.dropoffLocation : widget.dropoffLocation;
+    final seatLabel = _verifyDetails?.seatNumber.isNotEmpty == true ? _verifyDetails!.seatNumber : 'S-${widget.boardingSeat}';
+    final seatGrid = _verifyDetails?.seatGrid ?? [];
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -159,7 +336,7 @@ class _DriverPassengerPinVerificationScreenState extends State<DriverPassengerPi
                 children: [
                   const SizedBox(height: 10),
 
-                  // Smartphone Vector Illustration Graphic matching 89.png
+                  // Smartphone Vector Illustration Graphic
                   Center(
                     child: Container(
                       width: 140,
@@ -196,26 +373,26 @@ class _DriverPassengerPinVerificationScreenState extends State<DriverPassengerPi
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                widget.passengerName,
+                                pName,
                                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                '${widget.pickupLocation} → ${widget.dropoffLocation}',
+                                '$fromLoc → $toLoc',
                                 style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                               ),
                             ],
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
                             color: AppColors.primary,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            'Seat S-${widget.boardingSeat}',
-                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                            seatLabel.startsWith('S-') ? seatLabel : 'Seat $seatLabel',
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ],
@@ -224,42 +401,42 @@ class _DriverPassengerPinVerificationScreenState extends State<DriverPassengerPi
 
                   const SizedBox(height: 26),
 
-                  // 6 PIN Entry Fields Row matching 89.png
+                  // 4-Digit PIN Entry Fields Row
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final itemWidth = (constraints.maxWidth - 5 * 8) / 6;
+                      final itemWidth = (constraints.maxWidth - 3 * 14) / 4;
                       return Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: List.generate(6, (index) {
+                        children: List.generate(4, (index) {
                           return SizedBox(
                             width: itemWidth,
-                            height: 52,
+                            height: 56,
                             child: TextField(
                               controller: _controllers[index],
                               focusNode: _focusNodes[index],
                               textAlign: TextAlign.center,
                               keyboardType: TextInputType.number,
                               maxLength: 1,
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                               decoration: InputDecoration(
                                 counterText: '',
                                 contentPadding: EdgeInsets.zero,
                                 enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: AppColors.border),
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(color: AppColors.border, width: 1.5),
                                 ),
                                 focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(14),
                                   borderSide: const BorderSide(color: AppColors.primary, width: 2),
                                 ),
                               ),
                               onChanged: (value) {
-                                if (value.isNotEmpty && index < 5) {
+                                if (value.isNotEmpty && index < 3) {
                                   _focusNodes[index + 1].requestFocus();
                                 } else if (value.isEmpty && index > 0) {
                                   _focusNodes[index - 1].requestFocus();
                                 }
-                                if (_currentEnteredPin.length == 6) {
+                                if (_currentEnteredPin.length == 4) {
                                   FocusScope.of(context).unfocus();
                                 }
                               },
@@ -272,20 +449,31 @@ class _DriverPassengerPinVerificationScreenState extends State<DriverPassengerPi
 
                   const SizedBox(height: 28),
 
-                  // Verify PIN Primary Button matching 89.png
+                  // Verify PIN Primary Button
                   CustomButton(
-                    text: 'Verify pin',
+                    text: 'Verify PIN',
                     isLoading: _isLoading,
                     onPressed: _handleVerifyPin,
                   ),
 
-                  const SizedBox(height: 36),
+                  const SizedBox(height: 12),
 
-                  // Seats Available Section matching 89.png
+                  // Contactless QR Pass Verification Button
+                  CustomButton(
+                    text: 'Verify via QR Pass 📷',
+                    isOutlined: true,
+                    backgroundColor: const Color(0xFFF3EDF7),
+                    textColor: AppColors.primary,
+                    onPressed: _isLoading ? null : _handleVerifyQrPass,
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  // Seats Layout Section with Visual Matrix
                   const Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Seats Available',
+                      'Visual Seat Grid',
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                     ),
                   ),
@@ -296,30 +484,45 @@ class _DriverPassengerPinVerificationScreenState extends State<DriverPassengerPi
                     decoration: BoxDecoration(
                       color: const Color(0xFFF7F5FE),
                       borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.border),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: List.generate(widget.totalSeats, (index) {
-                        final seatNum = index + 1;
-                        final isBoarding = seatNum == widget.boardingSeat;
-                        final isBooked = widget.bookedSeats.contains(seatNum);
+                    child: seatGrid.isNotEmpty
+                        ? Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: seatGrid.map((item) {
+                              final isCurrent = item.seat == seatLabel || item.isPassengerSeat;
+                              return _buildSeatBox(
+                                '${item.seat} ${item.status}',
+                                isBooked: item.isBooked,
+                                isBoarding: isCurrent,
+                                isAvailable: item.isAvailable,
+                              );
+                            }).toList(),
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: List.generate(widget.totalSeats, (index) {
+                              final seatNum = index + 1;
+                              final isBoarding = seatNum == widget.boardingSeat;
+                              final isBooked = widget.bookedSeats.contains(seatNum);
 
-                        String label;
-                        if (isBoarding) {
-                          label = 'S-$seatNum Boarding';
-                        } else if (isBooked) {
-                          label = 'S-$seatNum Booked';
-                        } else {
-                          label = 'S-$seatNum Free';
-                        }
+                              String label;
+                              if (isBoarding) {
+                                label = 'S-$seatNum Boarding';
+                              } else if (isBooked) {
+                                label = 'S-$seatNum Booked';
+                              } else {
+                                label = 'S-$seatNum Available';
+                              }
 
-                        return _buildSeatBox(
-                          label,
-                          isBooked: isBooked,
-                          isBoarding: isBoarding,
-                        );
-                      }),
-                    ),
+                              return _buildSeatBox(
+                                label,
+                                isBooked: isBooked,
+                                isBoarding: isBoarding,
+                                isAvailable: !isBooked && !isBoarding,
+                              );
+                            }),
+                          ),
                   ),
                 ],
               ),
@@ -330,7 +533,7 @@ class _DriverPassengerPinVerificationScreenState extends State<DriverPassengerPi
     );
   }
 
-  Widget _buildSeatBox(String label, {required bool isBooked, bool isBoarding = false}) {
+  Widget _buildSeatBox(String label, {required bool isBooked, bool isBoarding = false, bool isAvailable = false}) {
     Color boxColor;
     Color iconColor;
 
@@ -341,18 +544,18 @@ class _DriverPassengerPinVerificationScreenState extends State<DriverPassengerPi
       boxColor = const Color(0xFFE8DEF8);
       iconColor = AppColors.primary;
     } else {
-      boxColor = const Color(0xFFC4D5C5);
-      iconColor = Colors.transparent;
+      boxColor = const Color(0xFFE8F5E9);
+      iconColor = const Color(0xFF2E7D32);
     }
 
     return Column(
       children: [
         Container(
-          width: 44,
-          height: 44,
+          width: 48,
+          height: 48,
           decoration: BoxDecoration(
             color: boxColor,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
             boxShadow: isBoarding
                 ? [
                     BoxShadow(
@@ -365,7 +568,7 @@ class _DriverPassengerPinVerificationScreenState extends State<DriverPassengerPi
           ),
           child: Center(
             child: Icon(
-              isBooked ? Icons.person_rounded : Icons.check_box_outline_blank_rounded,
+              isAvailable ? Icons.event_seat_outlined : (isBooked ? Icons.person_rounded : Icons.check_box_outline_blank_rounded),
               color: iconColor,
               size: 22,
             ),

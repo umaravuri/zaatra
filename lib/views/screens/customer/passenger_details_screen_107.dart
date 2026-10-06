@@ -3,9 +3,70 @@ import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../models/ride_booking_model.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/ride_service.dart';
 import '../../widgets/custom_button.dart';
 import 'payment_method_screen_57.dart';
 
+/// ============================================================================
+/// SCREEN DATA ARCHITECTURE & API DEPENDENCY SPECIFICATION
+/// ============================================================================
+/// 
+/// 1. APIS CALLED ON THIS SCREEN:
+/// ----------------------------------------------------------------------------
+/// A) [API 1: Customer Profile Prefill]
+///    - Invoked: In `initState()` via `AuthService.getCurrentUser()`
+///    - Source / Endpoint: Local Auth / Session Token Cache or `/api/auth/profile`
+///    - Data Received:
+///        • `name` (String) -> Split into First Name & Last Name controllers
+///        • `phone` (String) -> Populates Phone Number controller
+///        • `email` (String) -> Populates Email ID controller
+///    - Usage: Pre-populates customer input fields if empty so the user doesn't
+///      need to retype their profile information.
+///
+/// B) [API 2: Ride Booking Creation]
+///    - Invoked: On "Proceed to Payment" tap via `RideService.createBooking(...)`
+///    - Endpoint: `POST /api/rides/book`
+///    - Payload Dispatched (Frontend -> Backend):
+///        • `rideId`: Driver's published ride ID (from session)
+///        • `fullName`: Merged first + last name from text fields
+///        • `phoneNumber`: Full phone with prefix `+91 ...`
+///        • `emailID`: Customer email address
+///        • `numberOfSeats`: Selected count from dropdown (1..4)
+///        • `boardingPoint` / `pickup`: Selected boarding/pickup location
+///        • `destination`: Ride drop-off point
+///        • `customerPickupAddress`, `customerPickupPincode`, `customerPickupLandmark`
+///        • `doorstepPickupRequested`: Boolean flag (true if doorstep selected)
+///        • `extraPickupCharge`: Detour fee amount
+///        • `pricePerSeat`: Price per seat defined on driver ride
+///        • `totalAmount`: Total computed fare (seats * price + detour charge)
+///        • `luggage`: Selected luggage type (e.g. "1 Medium Bag")
+///    - Response Received (Backend -> Frontend):
+///        • `bookingId` / `id` / `_id`: Unique booking identifier created in DB
+///        • `razorpayOrderId` / `orderId`: Order ID for Razorpay checkout
+///        • `success`: Boolean status flag
+///    - Usage: Transitions to [PaymentMethodScreen] carrying the verified
+///      `bookingId` and `razorpayOrderId` for payment execution.
+///
+/// ----------------------------------------------------------------------------
+/// 2. FIELD CLASSIFICATION (DYNAMIC vs STATIC):
+/// ----------------------------------------------------------------------------
+/// • DYNAMIC / API & SESSION DRIVEN:
+///    - First Name & Last Name: Pre-filled via `AuthService`, editable by user.
+///    - Phone Number: Pre-filled via `AuthService`, editable by user (10 digits).
+///    - Email ID: Pre-filled via `AuthService`, editable by user.
+///    - Number of Seats: Dynamically inherited from customer search session (`session.seatsCount`).
+///    - Seat Fare: `session.driver.pricePerSeat * session.seatsCount` (Driver API).
+///    - Doorstep Detour Fee: `session.detourCharge` (Google Maps Distance Matrix API).
+///    - Total Payable: Live calculation `(pricePerSeat * seats) + detourCharge`.
+///
+/// • STATIC / UI-ONLY:
+///    - Screen title: "Passenger Details"
+///    - Field labels: "full name", "Last name", "Phone Number", "Email ID",
+///      "Number Of Seats", "Fare Summary", "Total Payable".
+///    - Phone prefix badge: "+91 "
+///    - Bottom background illustration: `assets/images/image 31.png`
+///    - Button CTA: "Proceed to Payment"
+/// ============================================================================
 class PassengerDetailsScreen extends StatefulWidget {
   final RideBookingSession? session;
 
@@ -19,24 +80,22 @@ class PassengerDetailsScreen extends StatefulWidget {
 }
 
 class _PassengerDetailsScreenState extends State<PassengerDetailsScreen> {
-  late final TextEditingController _nameController;
+  late final TextEditingController _firstNameController;
+  late final TextEditingController _lastNameController;
   late final TextEditingController _phoneController;
   late final TextEditingController _emailController;
-  int _selectedSeatsCount = 1;
 
-  RideBookingSession get _activeSession =>
-      widget.session ??
-      RideBookingSession(
-        driver: mockRideDrivers[0],
-      );
+  RideBookingSession get _activeSession => widget.session ?? const RideBookingSession();
+  int get _seatsCount => _activeSession.seatsCount > 0 ? _activeSession.seatsCount : 1;
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: _activeSession.passengerName);
+    final nameParts = _activeSession.passengerName.trim().split(' ');
+    _firstNameController = TextEditingController(text: nameParts.isNotEmpty ? nameParts.first : '');
+    _lastNameController = TextEditingController(text: nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '');
     _phoneController = TextEditingController(text: _activeSession.passengerPhone.replaceAll(RegExp(r'^\+91\s*'), ''));
     _emailController = TextEditingController(text: _activeSession.passengerEmail);
-    _selectedSeatsCount = _activeSession.seatsCount;
     _prefillFromAuth();
   }
 
@@ -44,9 +103,15 @@ class _PassengerDetailsScreenState extends State<PassengerDetailsScreen> {
     final user = await AuthService.getCurrentUser();
     if (user != null && mounted) {
       setState(() {
-        if (_nameController.text.isEmpty) {
+        if (_firstNameController.text.isEmpty && _lastNameController.text.isEmpty) {
           final n = user['name']?.toString() ?? '';
-          if (n.isNotEmpty) _nameController.text = n;
+          if (n.isNotEmpty) {
+            final parts = n.trim().split(' ');
+            _firstNameController.text = parts.first;
+            if (parts.length > 1) {
+              _lastNameController.text = parts.sublist(1).join(' ');
+            }
+          }
         }
         if (_emailController.text.isEmpty) {
           final e = user['email']?.toString() ?? '';
@@ -61,9 +126,13 @@ class _PassengerDetailsScreenState extends State<PassengerDetailsScreen> {
       });
     } else {
       final name = await AuthService.getUserName(defaultFallback: '');
-      if (name.isNotEmpty && mounted && _nameController.text.isEmpty) {
+      if (name.isNotEmpty && mounted && _firstNameController.text.isEmpty) {
         setState(() {
-          _nameController.text = name;
+          final parts = name.trim().split(' ');
+          _firstNameController.text = parts.first;
+          if (parts.length > 1) {
+            _lastNameController.text = parts.sublist(1).join(' ');
+          }
         });
       }
     }
@@ -71,20 +140,25 @@ class _PassengerDetailsScreenState extends State<PassengerDetailsScreen> {
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
     super.dispose();
   }
 
-  void _handleProceedToPayment(RideBookingSession session, double totalFare) {
-    final name = _nameController.text.trim();
+  bool _isSubmitting = false;
+
+  Future<void> _handleProceedToPayment(RideBookingSession session, double totalFare) async {
+    final firstName = _firstNameController.text.trim();
+    final lastName = _lastNameController.text.trim();
+    final fullName = '$firstName $lastName'.trim();
     final phone = _phoneController.text.trim();
     final email = _emailController.text.trim();
 
-    if (name.isEmpty) {
+    if (firstName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter passenger full name.'), backgroundColor: Colors.red),
+        const SnackBar(content: Text('Please enter full name.'), backgroundColor: Colors.red),
       );
       return;
     }
@@ -103,11 +177,69 @@ class _PassengerDetailsScreenState extends State<PassengerDetailsScreen> {
       return;
     }
 
+    setState(() => _isSubmitting = true);
+
+    final rideId = session.rideId.isNotEmpty ? session.rideId : session.driver.id;
+    final res = await RideService.createBooking(
+      rideId: rideId,
+      fullName: fullName,
+      lastName: lastName.isNotEmpty ? lastName : firstName,
+      phoneNumber: '+91 $phone',
+      emailID: email,
+      numberOfSeats: _seatsCount,
+      boardingPoint: session.boardingPoint.isNotEmpty ? session.boardingPoint : session.pickup,
+      destination: session.destination,
+      pickup: session.pickup.isNotEmpty ? session.pickup : session.boardingPoint,
+      customerPickupAddress: session.customerPickupAddress.isNotEmpty ? session.customerPickupAddress : session.boardingPoint,
+      customerPickupPincode: session.customerPickupPincode,
+      customerPickupLandmark: session.customerPickupLandmark,
+      custPickupLandmark: session.customerPickupLandmark,
+      doorstepPickupRequested: session.isDoorstepPickup,
+      extraPickupCharge: session.detourCharge,
+      pricePerSeat: session.driver.pricePerSeat,
+      totalAmount: totalFare,
+      luggage: session.luggage.isNotEmpty ? session.luggage : "1 Medium Bag",
+    );
+
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+
+    if (res['success'] != true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res['message']?.toString() ?? 'Failed to create booking. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final bookingId = res['bookingId']?.toString() ??
+        res['id']?.toString() ??
+        (res['data'] is Map
+            ? (res['data']['bookingId'] ?? res['data']['id'] ?? res['data']['_id'])?.toString() ?? ''
+            : '');
+    final razorpayOrderId = res['razorpayOrderId']?.toString() ??
+        res['orderId']?.toString() ??
+        res['order_id']?.toString() ??
+        res['razorpay_order_id']?.toString() ??
+        (res['data'] is Map
+            ? (res['data']['razorpayOrderId'] ??
+                    res['data']['orderId'] ??
+                    res['data']['order_id'] ??
+                    res['data']['razorpay_order_id'])
+                ?.toString() ??
+                ''
+            : '');
+
     final finalSession = session.copyWith(
-      passengerName: name,
+      rideId: rideId,
+      bookingId: bookingId,
+      razorpayOrderId: razorpayOrderId,
+      passengerName: fullName,
       passengerPhone: '+91 $phone',
       passengerEmail: email,
-      seatsCount: _selectedSeatsCount,
+      seatsCount: _seatsCount,
       totalAmount: totalFare,
     );
 
@@ -125,7 +257,8 @@ class _PassengerDetailsScreenState extends State<PassengerDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final session = _activeSession;
-    final seatFare = session.driver.pricePerSeat * _selectedSeatsCount;
+    final seatsCount = _seatsCount;
+    final seatFare = session.driver.pricePerSeat * seatsCount;
     final totalFare = seatFare + session.detourCharge;
 
     return Scaffold(
@@ -168,15 +301,25 @@ class _PassengerDetailsScreenState extends State<PassengerDetailsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Full Name', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                        const Text('full name', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                         const SizedBox(height: 8),
                         _buildInputField(
-                          controller: _nameController,
-                          hintText: 'Enter full name',
+                          controller: _firstNameController,
+                          hintText: 'Enter first name',
                           prefixIcon: const Icon(Icons.person_outline_rounded, color: AppColors.textSecondary),
                         ),
 
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
+
+                        const Text('Last name', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                        const SizedBox(height: 8),
+                        _buildInputField(
+                          controller: _lastNameController,
+                          hintText: 'Enter last name',
+                          prefixIcon: const Icon(Icons.person_outline_rounded, color: AppColors.textSecondary),
+                        ),
+
+                        const SizedBox(height: 16),
 
                         const Text('Phone Number', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                         const SizedBox(height: 8),
@@ -198,7 +341,7 @@ class _PassengerDetailsScreenState extends State<PassengerDetailsScreen> {
                           ],
                         ),
 
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
 
                         const Text('Email ID', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                         const SizedBox(height: 8),
@@ -214,27 +357,33 @@ class _PassengerDetailsScreenState extends State<PassengerDetailsScreen> {
                         const Text('Number Of Seats', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                         const SizedBox(height: 8),
 
+                        // Dynamic Read-Only Seat Badge inherited from Search Session
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: const Color(0xFFFAFAFA),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: AppColors.border),
                           ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<int>(
-                              value: _selectedSeatsCount,
-                              isExpanded: true,
-                              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textPrimary),
-                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                              items: [1, 2, 3, 4].map((count) {
-                                return DropdownMenuItem<int>(
-                                  value: count,
-                                  child: Text('$count ${count == 1 ? 'Seat' : 'Seats'} (₹${(session.driver.pricePerSeat * count).toStringAsFixed(0)})'),
-                                );
-                              }).toList(),
-                              onChanged: (val) => setState(() => _selectedSeatsCount = val!),
-                            ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(Icons.airline_seat_recline_normal_rounded, color: AppColors.primary, size: 20),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  '$seatsCount ${seatsCount == 1 ? 'Seat' : 'Seats'}',
+                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
 
@@ -245,14 +394,14 @@ class _PassengerDetailsScreenState extends State<PassengerDetailsScreen> {
                           decoration: BoxDecoration(
                             color: const Color(0xFFF7F4FB),
                             borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text('Fare Summary', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                               const SizedBox(height: 12),
-                              _buildFareRow('Seat Fare (${_selectedSeatsCount}x ₹${session.driver.pricePerSeat.toStringAsFixed(0)})', '₹${seatFare.toStringAsFixed(0)}'),
+                              _buildFareRow('Seat Fare (${seatsCount}x ₹${session.driver.pricePerSeat.toStringAsFixed(0)})', '₹${seatFare.toStringAsFixed(0)}'),
                               if (session.isDoorstepPickup) ...[
                                 const SizedBox(height: 8),
                                 _buildFareRow('Doorstep Detour Fee (${session.detourDistanceKm.toStringAsFixed(0)} km)', '₹${session.detourCharge.toStringAsFixed(0)}'),
@@ -282,7 +431,8 @@ class _PassengerDetailsScreenState extends State<PassengerDetailsScreen> {
                   padding: const EdgeInsets.all(20.0),
                   child: CustomButton(
                     text: 'Proceed to Payment',
-                    onPressed: () => _handleProceedToPayment(session, totalFare),
+                    isLoading: _isSubmitting,
+                    onPressed: _isSubmitting ? null : () => _handleProceedToPayment(session, totalFare),
                   ),
                 ),
               ],

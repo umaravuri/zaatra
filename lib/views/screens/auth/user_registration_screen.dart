@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,7 +10,7 @@ import '../../widgets/custom_button.dart';
 import 'otp_verification_screen_26.dart';
 
 class UserRegistrationScreen extends StatefulWidget {
-  const UserRegistrationScreen({Key? key}) : super(key: key);
+  const UserRegistrationScreen({super.key});
 
   @override
   State<UserRegistrationScreen> createState() => _UserRegistrationScreenState();
@@ -28,7 +29,21 @@ class _UserRegistrationScreenState extends State<UserRegistrationScreen> {
   String? _selectedRole;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _agreeToTerms = false;
   bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    _phoneController.dispose();
+    _cityController.dispose();
+    _stateController.dispose();
+    _countryController.dispose();
+    super.dispose();
+  }
 
   final List<Map<String, dynamic>> _roles = [
     {
@@ -102,15 +117,25 @@ class _UserRegistrationScreenState extends State<UserRegistrationScreen> {
       );
       return;
     }
+    if (name.length < 2 || !RegExp(r"^[a-zA-Z\s.]+$").hasMatch(name)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Name must contain only letters, spaces, and dots (at least 2 characters).'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
     if (phone.isEmpty || phone.length < 10 || !RegExp(r'^[6-9][0-9]{9}$').hasMatch(phone)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid 10-digit mobile number starting with 9, 8, 7, or 6.'), backgroundColor: Colors.red),
       );
       return;
     }
-    if (email.isEmpty || !email.contains('@')) {
+    final emailRegex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+    if (email.isEmpty || !emailRegex.hasMatch(email)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid email address.'), backgroundColor: Colors.red),
+        const SnackBar(content: Text('Please enter a valid email address (e.g. name@example.com).'), backgroundColor: Colors.red),
       );
       return;
     }
@@ -148,6 +173,15 @@ class _UserRegistrationScreenState extends State<UserRegistrationScreen> {
     if (country.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter your country.'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+    if (!_agreeToTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please agree to the Terms of Service & Privacy Policy to continue.'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -222,11 +256,26 @@ class _UserRegistrationScreenState extends State<UserRegistrationScreen> {
       await prefs.setString('last_registered_role', selectedRole.toLowerCase());
       await prefs.setString('currentUserRole', selectedRole.toLowerCase());
       await prefs.setString('currentUserName', name);
+      await prefs.setString('user_name_$cleanDigits', name);
       await prefs.setString('currentPhone', formattedPhone);
-      final token = regResult['token'] ?? (regResult['data'] is Map ? regResult['data']['token'] : null);
-      if (token != null) {
-        await prefs.setString('authToken', token.toString());
-      }
+      await prefs.setString('currentUserEmail', email);
+      await prefs.setString('user_email_$cleanDigits', email);
+      await prefs.setString('currentUserCity', city);
+      await prefs.setString('user_city_$cleanDigits', city);
+      await prefs.setString('currentUserLocation', '$city, $state');
+      await prefs.setString('user_location_$cleanDigits', '$city, $state');
+
+      final userProfileMap = {
+        'name': name,
+        'email': email,
+        'phone': formattedPhone,
+        'city': city,
+        'state': state,
+        'country': country,
+        'location': '$city, $state',
+        'role': selectedRole.toLowerCase(),
+      };
+      await prefs.setString('userProfile', jsonEncode(userProfileMap));
     } catch (_) {}
 
     // Call Login Init to trigger OTP
@@ -303,7 +352,10 @@ class _UserRegistrationScreenState extends State<UserRegistrationScreen> {
         ),
         centerTitle: true,
       ),
-      body: SafeArea(
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.opaque,
+        child: SafeArea(
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -359,7 +411,7 @@ class _UserRegistrationScreenState extends State<UserRegistrationScreen> {
                             margin: const EdgeInsets.symmetric(horizontal: 4),
                             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                             decoration: BoxDecoration(
-                              color: isSelected ? AppColors.primary.withOpacity(0.08) : AppColors.inputBackground,
+                              color: isSelected ? AppColors.primary.withValues(alpha: 0.08) : AppColors.inputBackground,
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: isSelected ? AppColors.primary : AppColors.border,
@@ -394,9 +446,14 @@ class _UserRegistrationScreenState extends State<UserRegistrationScreen> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: _nameController,
+                    keyboardType: TextInputType.name,
+                    textInputAction: TextInputAction.next,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z\s.]")),
+                    ],
                     style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                     decoration: InputDecoration(
-                      hintText: 'Enter your full name',
+                      hintText: 'Enter your full name (letters only)',
                       prefixIcon: const Icon(Icons.person_outline_rounded, color: AppColors.textSecondary),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                       fillColor: AppColors.inputBackground,
@@ -417,6 +474,7 @@ class _UserRegistrationScreenState extends State<UserRegistrationScreen> {
                   TextField(
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.next,
                     maxLength: 10,
                     inputFormatters: [
                       FilteringTextInputFormatter.allow(RegExp(r'^[6-9][0-9]*')),
@@ -452,6 +510,7 @@ class _UserRegistrationScreenState extends State<UserRegistrationScreen> {
                   TextField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
                     style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                     decoration: InputDecoration(
                       hintText: 'name@example.com',
@@ -475,6 +534,7 @@ class _UserRegistrationScreenState extends State<UserRegistrationScreen> {
                   TextField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
+                    textInputAction: TextInputAction.next,
                     style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
@@ -537,6 +597,7 @@ class _UserRegistrationScreenState extends State<UserRegistrationScreen> {
                   TextField(
                     controller: _confirmPasswordController,
                     obscureText: _obscureConfirmPassword,
+                    textInputAction: TextInputAction.next,
                     style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
@@ -607,6 +668,7 @@ class _UserRegistrationScreenState extends State<UserRegistrationScreen> {
                             const SizedBox(height: 8),
                             TextField(
                               controller: _cityController,
+                              textInputAction: TextInputAction.next,
                               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                               decoration: InputDecoration(
                                 hintText: 'Mumbai',
@@ -670,6 +732,7 @@ class _UserRegistrationScreenState extends State<UserRegistrationScreen> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: _countryController,
+                    textInputAction: TextInputAction.done,
                     style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                     decoration: InputDecoration(
                       hintText: 'India',
@@ -687,7 +750,65 @@ class _UserRegistrationScreenState extends State<UserRegistrationScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 20),
+
+                  // 📜 Terms of Service & Privacy Policy Checkbox
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: Checkbox(
+                          value: _agreeToTerms,
+                          activeColor: AppColors.primary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                          onChanged: (val) {
+                            setState(() {
+                              _agreeToTerms = val ?? false;
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _agreeToTerms = !_agreeToTerms;
+                            });
+                          },
+                          child: RichText(
+                            text: const TextSpan(
+                              text: 'I agree to the ',
+                              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                              children: [
+                                TextSpan(
+                                  text: 'Terms of Service',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primary,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                                TextSpan(text: ' & '),
+                                TextSpan(
+                                  text: 'Privacy Policy',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primary,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
                   CustomButton(
                     text: 'Register Account',
                     isLoading: _isLoading,
@@ -724,6 +845,7 @@ class _UserRegistrationScreenState extends State<UserRegistrationScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

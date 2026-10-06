@@ -12,8 +12,8 @@ class LocationSearchScreen extends StatefulWidget {
 }
 
 class _LocationSearchScreenState extends State<LocationSearchScreen> {
-  final _pickupController = TextEditingController(text: 'Madhapur, Hitech City');
-  final _dropoffController = TextEditingController(text: 'Secunderabad Railway Station');
+  final _pickupController = TextEditingController();
+  final _dropoffController = TextEditingController();
 
   Future<void> _selectPickup() async {
     final picked = await LocationAutocompletePickerModal.show(

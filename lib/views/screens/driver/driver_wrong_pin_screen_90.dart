@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../services/ride_service.dart';
 import '../../widgets/custom_button.dart';
-import 'driver_on_trip_seats_screen_91.dart';
 
 class DriverWrongPinScreen extends StatefulWidget {
   final String initialWrongPin;
   final String passengerName;
   final String rideId;
+  final String? bookingId;
+  final String? seatNumber;
   final String? expectedPin;
 
   const DriverWrongPinScreen({
@@ -15,7 +16,9 @@ class DriverWrongPinScreen extends StatefulWidget {
     this.initialWrongPin = '',
     this.passengerName = 'Passenger',
     this.rideId = 'RIDE-8902',
-    this.expectedPin = '849201',
+    this.bookingId,
+    this.seatNumber,
+    this.expectedPin = '8492',
   });
 
   @override
@@ -30,13 +33,13 @@ class _DriverWrongPinScreenState extends State<DriverWrongPinScreen> {
   @override
   void initState() {
     super.initState();
-    _controllers = List.generate(6, (index) {
+    _controllers = List.generate(4, (index) {
       if (index < widget.initialWrongPin.length) {
         return TextEditingController(text: widget.initialWrongPin[index]);
       }
       return TextEditingController();
     });
-    _focusNodes = List.generate(6, (index) => FocusNode());
+    _focusNodes = List.generate(4, (index) => FocusNode());
   }
 
   @override
@@ -54,10 +57,10 @@ class _DriverWrongPinScreenState extends State<DriverWrongPinScreen> {
 
   Future<void> _handleReVerify() async {
     final pin = _currentEnteredPin;
-    if (pin.length < 6) {
+    if (pin.length < 4) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter all 6 digits of the PIN.'),
+          content: Text('Please enter all 4 digits of the PIN.'),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -69,7 +72,10 @@ class _DriverWrongPinScreenState extends State<DriverWrongPinScreen> {
     try {
       final res = await RideService.verifyPassengerPin(
         rideId: widget.rideId,
+        bookingId: widget.bookingId,
         pin: pin,
+        seatNumber: widget.seatNumber,
+        passengerName: widget.passengerName,
         expectedPin: widget.expectedPin,
       );
 
@@ -160,42 +166,45 @@ class _DriverWrongPinScreenState extends State<DriverWrongPinScreen> {
 
                   const SizedBox(height: 36),
 
-                  // 6 PIN Entry Fields Row matching 90.png
+                  // 4 PIN Entry Fields Row matching 90.png
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final itemWidth = (constraints.maxWidth - 5 * 8) / 6;
+                      final itemWidth = (constraints.maxWidth - 3 * 16) / 4;
                       return Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: List.generate(6, (index) {
-                          return SizedBox(
-                            width: itemWidth,
-                            height: 52,
-                            child: TextField(
-                              controller: _controllers[index],
-                              focusNode: _focusNodes[index],
-                              textAlign: TextAlign.center,
-                              keyboardType: TextInputType.number,
-                              maxLength: 1,
-                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.redAccent),
-                              decoration: InputDecoration(
-                                counterText: '',
-                                contentPadding: EdgeInsets.zero,
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(4, (index) {
+                          return Padding(
+                            padding: EdgeInsets.only(right: index < 3 ? 16.0 : 0.0),
+                            child: SizedBox(
+                              width: itemWidth.clamp(52.0, 68.0),
+                              height: 60,
+                              child: TextField(
+                                controller: _controllers[index],
+                                focusNode: _focusNodes[index],
+                                textAlign: TextAlign.center,
+                                keyboardType: TextInputType.number,
+                                maxLength: 1,
+                                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.redAccent),
+                                decoration: InputDecoration(
+                                  counterText: '',
+                                  contentPadding: EdgeInsets.zero,
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(color: Colors.redAccent, width: 2),
+                                  ),
                                 ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: Colors.redAccent, width: 2),
-                                ),
+                                onChanged: (value) {
+                                  if (value.isNotEmpty && index < 3) {
+                                    _focusNodes[index + 1].requestFocus();
+                                  } else if (value.isEmpty && index > 0) {
+                                    _focusNodes[index - 1].requestFocus();
+                                  }
+                                },
                               ),
-                              onChanged: (value) {
-                                if (value.isNotEmpty && index < 5) {
-                                  _focusNodes[index + 1].requestFocus();
-                                } else if (value.isEmpty && index > 0) {
-                                  _focusNodes[index - 1].requestFocus();
-                                }
-                              },
                             ),
                           );
                         }),

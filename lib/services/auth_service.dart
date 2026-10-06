@@ -114,14 +114,36 @@ class AuthService {
         final prefs = await SharedPreferences.getInstance();
         final token = result['token'] ?? (result['data'] is Map ? result['data']['token'] : null);
         final user = result['user'] ?? (result['data'] is Map ? result['data']['user'] : null);
+        final cleanPhone = phone.replaceAll(RegExp(r'[^0-9]'), '');
 
         if (token != null) {
           await prefs.setString('authToken', token.toString());
         }
         if (user != null) {
           await prefs.setString('userProfile', jsonEncode(user));
+          if (user is Map) {
+            if (user['name'] != null && user['name'].toString().isNotEmpty) {
+              await prefs.setString('currentUserName', user['name'].toString());
+              await prefs.setString('user_name_$cleanPhone', user['name'].toString());
+            }
+            if (user['email'] != null && user['email'].toString().isNotEmpty) {
+              await prefs.setString('currentUserEmail', user['email'].toString());
+              await prefs.setString('user_email_$cleanPhone', user['email'].toString());
+            }
+            if (user['city'] != null && user['city'].toString().isNotEmpty) {
+              await prefs.setString('currentUserCity', user['city'].toString());
+              await prefs.setString('user_city_$cleanPhone', user['city'].toString());
+            }
+            if (user['location'] != null && user['location'].toString().isNotEmpty) {
+              await prefs.setString('currentUserLocation', user['location'].toString());
+              await prefs.setString('user_location_$cleanPhone', user['location'].toString());
+            }
+          }
         }
+        await prefs.setString('currentPhone', phone);
         await prefs.setString('selectedRole', role.toLowerCase());
+        await prefs.setString('currentUserRole', role.toLowerCase());
+        await prefs.setString('user_role_$cleanPhone', role.toLowerCase());
       } catch (_) {}
     }
 
@@ -142,8 +164,30 @@ class AuthService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final userStr = prefs.getString('userProfile');
-      if (userStr != null) {
-        return jsonDecode(userStr) as Map<String, dynamic>;
+      if (userStr != null && userStr.trim().isNotEmpty) {
+        try {
+          final decoded = jsonDecode(userStr);
+          if (decoded is Map<String, dynamic>) {
+            return decoded;
+          }
+          if (decoded is Map) {
+            return Map<String, dynamic>.from(decoded);
+          }
+        } catch (_) {
+          // If stringified Dart map format, extract key-values via regex
+          final parsed = <String, dynamic>{};
+          final nameMatch = RegExp(r'name:\s*([^,}]+)').firstMatch(userStr);
+          final emailMatch = RegExp(r'email:\s*([^,}]+)').firstMatch(userStr);
+          final phoneMatch = RegExp(r'phone:\s*([^,}]+)').firstMatch(userStr);
+          final cityMatch = RegExp(r'city:\s*([^,}]+)').firstMatch(userStr);
+          final locMatch = RegExp(r'location:\s*([^,}]+)').firstMatch(userStr);
+          if (nameMatch != null) parsed['name'] = nameMatch.group(1)?.trim();
+          if (emailMatch != null) parsed['email'] = emailMatch.group(1)?.trim();
+          if (phoneMatch != null) parsed['phone'] = phoneMatch.group(1)?.trim();
+          if (cityMatch != null) parsed['city'] = cityMatch.group(1)?.trim();
+          if (locMatch != null) parsed['location'] = locMatch.group(1)?.trim();
+          if (parsed.isNotEmpty) return parsed;
+        }
       }
     } catch (_) {}
     return null;

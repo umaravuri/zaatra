@@ -35,7 +35,11 @@ class _HostPropertySubmittedThankYouScreenState extends State<HostPropertySubmit
 
     final prefs = await SharedPreferences.getInstance();
     final phone = widget.hostPhone ?? prefs.getString('currentPhone') ?? '';
-    final result = await HostService.checkHostApprovalStatus(hostPhone: phone);
+    final user = await AuthService.getCurrentUser();
+    final result = await HostService.checkHostApprovalStatus(
+      hostPhone: phone,
+      userProfile: user,
+    );
 
     if (!mounted) return;
     setState(() => _isChecking = false);

@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/driver_service.dart';
+import '../../../services/host_service.dart';
 import '../../widgets/custom_button.dart';
 import '../role_selection_screen_27.dart';
 import '../driver/become_driver_screen_29.dart';
+import '../host/become_host_screen_28.dart';
 import 'login_screen_115.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
@@ -18,7 +20,7 @@ class OtpVerificationScreen extends StatefulWidget {
   final String? password;
 
   const OtpVerificationScreen({
-    Key? key,
+    super.key,
     required this.phoneNumber,
     this.isExistingUser = false,
     this.isRegistrationFlow = false,
@@ -26,7 +28,7 @@ class OtpVerificationScreen extends StatefulWidget {
     this.userRole = 'Host',
     this.expectedOtp,
     this.password,
-  }) : super(key: key);
+  });
 
   @override
   State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
@@ -56,6 +58,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         newOtp = backendOtp;
       }
     }
+
+    if (!mounted) return;
 
     setState(() {
       _currentExpectedOtp = newOtp;
@@ -143,8 +147,15 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       ),
     );
 
-    // 🚀 Check Admin Approval Status
-    final isApproved = await DriverService.checkAdminApproval(widget.phoneNumber);
+    // 🚀 Check Admin Approval Status according to role
+    bool isApproved = false;
+    final isHostRole = widget.userRole.toLowerCase() == 'host';
+    if (isHostRole) {
+      final hostApproval = await HostService.checkHostApprovalStatus(hostPhone: widget.phoneNumber);
+      isApproved = hostApproval.status == HostApprovalStatus.approved;
+    } else {
+      isApproved = await DriverService.checkAdminApproval(widget.phoneNumber);
+    }
 
     if (!mounted) return;
 
@@ -162,11 +173,13 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       );
     } else {
       // Case 2 — Not Approved by Admin:
-      // Treat as New Customer -> Get Started Screen (BecomeDriverScreen)
+      // Treat as New Customer -> Get Started Screen
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => const BecomeDriverScreen(),
+          builder: (context) => isHostRole
+              ? const BecomeHostScreen()
+              : const BecomeDriverScreen(),
         ),
       );
     }
@@ -247,9 +260,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.08),
+                  color: AppColors.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
                 ),
                 child: Row(
                   children: [
@@ -349,11 +362,11 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       ),
                     ),
                   ),
-                  Text.rich(
+                  const Text.rich(
                     TextSpan(
                       text: 'Expires in ',
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                      children: const [
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                      children: [
                         TextSpan(
                           text: '00 : 59',
                           style: TextStyle(

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/driver_service.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import 'driver_document_upload_screen_21.dart';
@@ -28,25 +30,79 @@ class _DriverPersonalInfoScreenState extends State<DriverPersonalInfoScreen> {
   }
 
   Future<void> _loadAuthProfile() async {
-    final user = await AuthService.getCurrentUser();
-    if (user != null && mounted) {
-      setState(() {
-        _nameController.text = user['name']?.toString() ?? '';
-        _emailController.text = user['email']?.toString() ?? '';
-        final p = user['phone']?.toString() ?? '';
-        final digits = p.replaceAll(RegExp(r'[^0-9]'), '');
-        final tenDigits = digits.length >= 10 ? digits.substring(digits.length - 10) : digits;
-        _phoneController.text = tenDigits;
-        _locationController.text = user['location']?.toString() ?? user['city']?.toString() ?? '';
-      });
-    } else {
-      final name = await AuthService.getUserName(defaultFallback: '');
-      if (name.isNotEmpty && mounted) {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final currentPhone = prefs.getString('currentPhone') ?? '';
+      final cleanDigits = currentPhone.replaceAll(RegExp(r'[^0-9]'), '');
+      final tenDigits = cleanDigits.length >= 10 ? cleanDigits.substring(cleanDigits.length - 10) : cleanDigits;
+
+      String resolvedName = '';
+      String resolvedEmail = '';
+      String resolvedPhone = tenDigits;
+      String resolvedLocation = '';
+
+      // Tier 1: Check AuthService.getCurrentUser()
+      final user = await AuthService.getCurrentUser();
+      if (user != null) {
+        resolvedName = user['name']?.toString().trim() ?? '';
+        resolvedEmail = user['email']?.toString().trim() ?? '';
+        final p = user['phone']?.toString().trim() ?? '';
+        if (p.isNotEmpty) {
+          final d = p.replaceAll(RegExp(r'[^0-9]'), '');
+          resolvedPhone = d.length >= 10 ? d.substring(d.length - 10) : d;
+        }
+        resolvedLocation = user['location']?.toString().trim() ?? user['city']?.toString().trim() ?? '';
+      }
+
+      // Tier 2: Check SharedPreferences dedicated keys
+      if (resolvedName.isEmpty) {
+        resolvedName = prefs.getString('user_name_$cleanDigits') ??
+            prefs.getString('currentUserName') ??
+            await AuthService.getUserName(phone: currentPhone, defaultFallback: '');
+      }
+      if (resolvedEmail.isEmpty) {
+        resolvedEmail = prefs.getString('user_email_$cleanDigits') ??
+            prefs.getString('currentUserEmail') ??
+            prefs.getString('driver_email_$cleanDigits') ??
+            '';
+      }
+      if (resolvedPhone.isEmpty && currentPhone.isNotEmpty) {
+        resolvedPhone = tenDigits;
+      }
+      if (resolvedLocation.isEmpty) {
+        resolvedLocation = prefs.getString('user_location_$cleanDigits') ??
+            prefs.getString('currentUserLocation') ??
+            prefs.getString('user_city_$cleanDigits') ??
+            prefs.getString('currentUserCity') ??
+            '';
+      }
+
+      // Tier 3: If email or location is still missing, try live profile API
+      if ((resolvedEmail.isEmpty || resolvedLocation.isEmpty || resolvedName.isEmpty) && currentPhone.isNotEmpty) {
+        try {
+          final personalRes = await DriverService.getPersonalInfo(phone: currentPhone);
+          if (personalRes['success'] == true) {
+            final p = personalRes['personalInformation'] ?? personalRes['data'] ?? personalRes['driver'] ?? personalRes;
+            if (p is Map) {
+              if (resolvedName.isEmpty && p['fullName'] != null) resolvedName = p['fullName'].toString().trim();
+              if (resolvedName.isEmpty && p['name'] != null) resolvedName = p['name'].toString().trim();
+              if (resolvedEmail.isEmpty && p['email'] != null) resolvedEmail = p['email'].toString().trim();
+              if (resolvedLocation.isEmpty && p['location'] != null) resolvedLocation = p['location'].toString().trim();
+              if (resolvedLocation.isEmpty && p['city'] != null) resolvedLocation = p['city'].toString().trim();
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (mounted) {
         setState(() {
-          _nameController.text = name;
+          if (resolvedName.isNotEmpty) _nameController.text = resolvedName;
+          if (resolvedEmail.isNotEmpty) _emailController.text = resolvedEmail;
+          if (resolvedPhone.isNotEmpty) _phoneController.text = resolvedPhone;
+          if (resolvedLocation.isNotEmpty) _locationController.text = resolvedLocation;
         });
       }
-    }
+    } catch (_) {}
   }
 
   void _nextStep() {

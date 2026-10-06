@@ -11,7 +11,7 @@ class IntermediatePickupModel {
 
   IntermediatePickupModel({
     required this.location,
-    required this.pinCode,
+    this.pinCode = '',
     this.landmark,
     required this.time,
     required this.price,

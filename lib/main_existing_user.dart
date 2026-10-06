@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'core/config/app_env.dart';
 import 'core/theme/app_theme.dart';
 import 'views/screens/role_selection_screen_27.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AppEnv.init();
   runApp(const ZaatraExistingUserApp());
 }
 

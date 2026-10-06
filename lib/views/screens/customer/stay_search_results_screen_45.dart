@@ -6,17 +6,44 @@ import 'stay_filters_screen_43.dart';
 import 'stay_map_search_screen_53.dart';
 
 class StaySearchResultsScreen extends StatefulWidget {
-  const StaySearchResultsScreen({super.key});
+  final String? destinationCity;
+  final String? locationName;
+
+  const StaySearchResultsScreen({
+    super.key,
+    this.destinationCity,
+    this.locationName,
+  });
 
   @override
   State<StaySearchResultsScreen> createState() => _StaySearchResultsScreenState();
 }
 
 class _StaySearchResultsScreenState extends State<StaySearchResultsScreen> {
-  final List<Hotel> _hotels = mockHotels;
+  late List<Hotel> _hotels;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.destinationCity != null && widget.destinationCity!.isNotEmpty) {
+      final cityLower = widget.destinationCity!.toLowerCase();
+      final filtered = mockHotels.where((h) =>
+          h.city.toLowerCase().contains(cityLower) ||
+          h.location.toLowerCase().contains(cityLower) ||
+          (widget.locationName != null && h.description.toLowerCase().contains(widget.locationName!.toLowerCase()))
+      ).toList();
+      _hotels = filtered.isNotEmpty ? filtered : mockHotels;
+    } else {
+      _hotels = mockHotels;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final destinationTitle = widget.locationName != null
+        ? 'Stays near ${widget.locationName}'
+        : (widget.destinationCity != null ? 'Hotels in ${widget.destinationCity}' : 'Hotels & Stays');
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -24,10 +51,10 @@ class _StaySearchResultsScreenState extends State<StaySearchResultsScreen> {
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Column(
+        title: Column(
           children: [
-            Text('Hotels & Stays', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-            Text('Explore 4 Featured Options', style: TextStyle(fontSize: 11, color: Colors.white70)),
+            Text(destinationTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+            Text('Explore ${_hotels.length} Accommodation Options', style: const TextStyle(fontSize: 11, color: Colors.white70)),
           ],
         ),
         actions: [

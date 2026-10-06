@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../services/ride_service.dart';
 import '../../widgets/custom_button.dart';
 import 'ride_search_map_screen_44.dart';
 
 class RideSearchScreen extends StatefulWidget {
-  const RideSearchScreen({Key? key}) : super(key: key);
+  final String? initialDestination;
+  final String? initialPickup;
+
+  const RideSearchScreen({
+    super.key,
+    this.initialDestination,
+    this.initialPickup,
+  });
 
   @override
   State<RideSearchScreen> createState() => _RideSearchScreenState();
@@ -12,19 +20,49 @@ class RideSearchScreen extends StatefulWidget {
 
 class _RideSearchScreenState extends State<RideSearchScreen> {
   bool _isRideSelected = true;
-  final _pickupController = TextEditingController(text: 'Madhapur , Hyderabad');
-  final _destinationController = TextEditingController(text: 'Secundrabad');
+  late final TextEditingController _pickupController;
+  late final TextEditingController _destinationController;
   late String _date;
   late String _time;
   String _passengers = '2 Passengers';
+  String _pickupPlaceholder = 'Enter pickup location';
+  String _destPlaceholder = 'Enter destination location';
+  List<Map<String, dynamic>> _popularRoutes = [];
 
   @override
   void initState() {
     super.initState();
+    _pickupController = TextEditingController(text: widget.initialPickup ?? '');
+    _destinationController = TextEditingController(text: widget.initialDestination ?? '');
     final now = DateTime.now();
     final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     _date = '${now.day} ${months[now.month - 1]} ${now.year}';
     _time = '09:30 AM';
+    _loadSearchConfig();
+  }
+
+  Future<void> _loadSearchConfig() async {
+    try {
+      final res = await RideService.getSearchConfig();
+      if (res['success'] == true && mounted) {
+        setState(() {
+          final p = res['placeholders'] ?? (res['data'] is Map ? res['data']['placeholders'] : null);
+          if (p is Map) {
+            _pickupPlaceholder = p['pickupLocation'] ?? p['pickup'] ?? _pickupPlaceholder;
+            _destPlaceholder = p['destination'] ?? _destPlaceholder;
+          }
+          final defs = res['defaultValues'] ?? (res['data'] is Map ? res['data']['defaultValues'] : null);
+          if (defs is Map && defs['passengers'] != null) {
+            final pCount = defs['passengers'];
+            _passengers = '$pCount Passenger${pCount > 1 ? 's' : ''}';
+          }
+          final q = res['quickOptions'] ?? (res['data'] is Map ? res['data']['quickOptions'] : null);
+          if (q is Map && q['popularRoutes'] is List) {
+            _popularRoutes = List<Map<String, dynamic>>.from(q['popularRoutes']);
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -167,7 +205,7 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
         title: Container(
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
+            color: Colors.white.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Row(
@@ -262,7 +300,9 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
                                     TextField(
                                       controller: _pickupController,
                                       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                                      decoration: const InputDecoration(
+                                      decoration: InputDecoration(
+                                        hintText: _pickupPlaceholder,
+                                        hintStyle: const TextStyle(fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.normal),
                                         isDense: true,
                                         contentPadding: EdgeInsets.zero,
                                         border: InputBorder.none,
@@ -298,7 +338,9 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
                                     TextField(
                                       controller: _destinationController,
                                       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                                      decoration: const InputDecoration(
+                                      decoration: InputDecoration(
+                                        hintText: _destPlaceholder,
+                                        hintStyle: const TextStyle(fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.normal),
                                         isDense: true,
                                         contentPadding: EdgeInsets.zero,
                                         border: InputBorder.none,
@@ -310,6 +352,39 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
                             ],
                           ),
                         ),
+
+                        // Popular Quick-Routes Chips (from /api/rides/search-config)
+                        if (_popularRoutes.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            height: 34,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: _popularRoutes.length,
+                              separatorBuilder: (_, __) => const SizedBox(width: 8),
+                              itemBuilder: (context, idx) {
+                                final r = _popularRoutes[idx];
+                                final from = r['from']?.toString() ?? '';
+                                final to = r['to']?.toString() ?? '';
+                                return ActionChip(
+                                  label: Text(
+                                    '$from → $to',
+                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary),
+                                  ),
+                                  backgroundColor: const Color(0xFFF3EDF7),
+                                  side: BorderSide.none,
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  onPressed: () {
+                                    setState(() {
+                                      _pickupController.text = from;
+                                      _destinationController.text = to;
+                                    });
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                        ],
 
                         const SizedBox(height: 14),
 

@@ -50,4 +50,9 @@ app.*.map.json
 *.hprof
 *.hprof.*
 
+# Environment Secrets
+.env
+*.env
+!.env.example
+
 

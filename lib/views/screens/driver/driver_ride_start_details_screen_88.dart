@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../models/ride_booking_model.dart';
 import '../../../services/api_service.dart';
 import '../../../services/ride_service.dart';
 import '../../widgets/custom_button.dart';
@@ -43,6 +44,7 @@ class _DriverRideStartDetailsScreenState extends State<DriverRideStartDetailsScr
   late List<Map<String, dynamic>> _passengers;
   late List<Map<String, dynamic>> _stops;
   final TextEditingController _broadcastMsgController = TextEditingController();
+  StartRideLockStatus _startRideStatus = const StartRideLockStatus();
 
   @override
   void initState() {
@@ -131,15 +133,22 @@ class _DriverRideStartDetailsScreenState extends State<DriverRideStartDetailsScr
               'bookingId': p['bookingId'] ?? 'BK-${loadedPassengers.length + 1}',
               'name': p['name'] ?? 'Passenger',
               'title': 'Passenger ${p['passengerIndex'] ?? (loadedPassengers.length + 1)}',
-              'route': p['segment'] ?? p['route'] ?? 'Route',
-              'time': p['timeWindow'] ?? '10:00 AM',
+              'route': p['segment'] ?? p['route'] ?? '',
+              'time': p['timeWindow'] ?? '',
               'pickup': p['from'] ?? _origin,
               'dropoff': p['to'] ?? _destination,
               'seatNumber': sNum,
-              'expectedPin': p['boardingPin'] ?? '849201',
+              'expectedPin': p['boardingPin'] ?? p['pin'] ?? '',
               'isBoarded': p['isBoarded'] == true,
             });
           }
+        }
+
+        // Map Start Ride Lock Status if provided by backend
+        if (res['startRideStatus'] is Map) {
+          _startRideStatus = StartRideLockStatus.fromJson(Map<String, dynamic>.from(res['startRideStatus'] as Map));
+        } else if (res['actions'] is Map) {
+          _startRideStatus = StartRideLockStatus.fromJson(Map<String, dynamic>.from(res['actions'] as Map));
         }
       }
 
@@ -165,11 +174,11 @@ class _DriverRideStartDetailsScreenState extends State<DriverRideStartDetailsScr
                 'name': b['userName'] ?? b['passengerName'] ?? b['customerName'] ?? 'Passenger ${i + 1}',
                 'title': 'Passenger ${loadedPassengers.length + 1}',
                 'route': '${(b['pickupLocation'] ?? b['from'] ?? _origin).toString().split(',').first} - ${(b['destinationLocation'] ?? b['to'] ?? _destination).toString().split(',').first}',
-                'time': b['departureTime'] ?? '06:00 AM',
+                'time': b['departureTime'] ?? '',
                 'pickup': b['pickupLocation'] ?? b['from'] ?? _origin,
                 'dropoff': b['destinationLocation'] ?? b['to'] ?? _destination,
                 'seatNumber': b['seatsBooked'] ?? b['seats'] ?? (i + 1),
-                'expectedPin': b['pin'] ?? b['boardingPin'] ?? '849201',
+                'expectedPin': b['pin'] ?? b['boardingPin'] ?? '',
                 'isBoarded': status == 'boarded' || status == 'completed',
               });
             }
@@ -193,6 +202,9 @@ class _DriverRideStartDetailsScreenState extends State<DriverRideStartDetailsScr
 
   Future<void> _verifyPassengerPin(int index) async {
     final passenger = _passengers[index];
+    final bookedSeatsList = _passengers
+        .map<int>((p) => p['seatNumber'] is int ? p['seatNumber'] as int : int.tryParse(p['seatNumber'].toString()) ?? 1)
+        .toList();
 
     final result = await Navigator.push<bool>(
       context,
@@ -201,10 +213,10 @@ class _DriverRideStartDetailsScreenState extends State<DriverRideStartDetailsScr
           passengerName: passenger['name'] ?? 'Passenger',
           pickupLocation: passenger['pickup'] ?? _origin,
           dropoffLocation: passenger['dropoff'] ?? _destination,
-          expectedPin: passenger['expectedPin'] ?? '849201',
-          boardingSeat: passenger['seatNumber'] ?? (index + 1),
+          expectedPin: passenger['expectedPin'] ?? '',
+          boardingSeat: passenger['seatNumber'] is int ? passenger['seatNumber'] : int.tryParse(passenger['seatNumber'].toString()) ?? (index + 1),
           totalSeats: 4,
-          bookedSeats: const [1, 2, 3],
+          bookedSeats: bookedSeatsList.isNotEmpty ? bookedSeatsList : [1],
           rideId: _rideId,
           bookingId: passenger['bookingId'],
         ),
@@ -245,13 +257,168 @@ class _DriverRideStartDetailsScreenState extends State<DriverRideStartDetailsScr
     }
   }
 
-  Future<void> _startGoogleMapsNavigation() async {
+  void _showStartLockDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Row(
+          children: [
+            Icon(Icons.lock_clock_rounded, color: Colors.orange, size: 24),
+            SizedBox(width: 8),
+            Text('Ride Start Locked', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _startRideStatus.lockReason.isNotEmpty
+                  ? _startRideStatus.lockReason
+                  : 'Ride cannot be started yet. Starting will be enabled 5 hours before scheduled departure.',
+              style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+            ),
+            const SizedBox(height: 16),
+            if (_startRideStatus.startRideAllowedFromFormatted.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF8E1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.alarm, color: Colors.orange, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Unlocks at: ${_startRideStatus.startRideAllowedFromFormatted}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF8D6E63)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _launchNavigationDirectly();
+            },
+            child: const Text('Start Ride Anyway', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _triggerPreTripAlert() async {
+    try {
+      final res = await RideService.sendPreTripAlert(rideId: _rideId);
+      if (!mounted) return;
+      if (res['success'] == true) {
+        setState(() {
+          _startRideStatus = StartRideLockStatus(
+            canStartRide: _startRideStatus.canStartRide,
+            isLocked: _startRideStatus.isLocked,
+            departureDateTime: _startRideStatus.departureDateTime,
+            departureFormatted: _startRideStatus.departureFormatted,
+            startRideAllowedFrom: _startRideStatus.startRideAllowedFrom,
+            startRideAllowedFromFormatted: _startRideStatus.startRideAllowedFromFormatted,
+            hoursRemainingUntilStart: _startRideStatus.hoursRemainingUntilStart,
+            minutesRemainingUntilStart: _startRideStatus.minutesRemainingUntilStart,
+            lockReason: _startRideStatus.lockReason,
+            buttonText: _startRideStatus.buttonText,
+            preTripAlertSent: true,
+          );
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message']?.toString() ?? '5-Hour Pre-Trip alarms successfully dispatched! ⏰'),
+            backgroundColor: const Color(0xFF2E7D32),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message']?.toString() ?? 'Failed to send pre-trip alert.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
+  Future<void> _startRide() async {
+    if (_startRideStatus.isLocked) {
+      _showStartLockDialog();
+      return;
+    }
+    await _launchNavigationDirectly();
+  }
+
+  Future<void> _launchNavigationDirectly() async {
+    // 1. Call start-ride API
+    try {
+      await RideService.startRide(rideId: _rideId);
+    } catch (_) {}
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ride started successfully! 🚀 Starting navigation...'),
+          backgroundColor: Color(0xFF2E7D32),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+
+    // 2. Launch Google Maps navigation
+    await _startGoogleMapsNavigation(force: true);
+  }
+
+  Future<void> _startGoogleMapsNavigation({bool force = false}) async {
+    // Check if ride start is locked
+    if (!force && _startRideStatus.isLocked) {
+      _showStartLockDialog();
+      return;
+    }
+
     // 1. Call start-navigation API
     final apiRes = await RideService.startNavigation(
       rideId: _rideId,
       origin: _origin,
       destination: _destination,
     );
+
+    if (!force && apiRes['isLocked'] == true) {
+      if (mounted) {
+        setState(() {
+          _startRideStatus = StartRideLockStatus.fromJson(apiRes);
+        });
+        _showStartLockDialog();
+      }
+      return;
+    }
 
     final navData = apiRes['navigation'] ?? {};
     final navIntentUrl = navData['googleMapsNavigationUrl'] ?? 'google.navigation:q=${Uri.encodeComponent(_destination)}&mode=d';
@@ -356,25 +523,226 @@ class _DriverRideStartDetailsScreenState extends State<DriverRideStartDetailsScr
     );
   }
 
+  Future<void> _notifyDriverArrived() async {
+    try {
+      final res = await RideService.driverArrivedAtPickup(rideId: _rideId);
+      if (!mounted) return;
+      if (res['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message']?.toString() ?? 'Arrival notification sent to all passengers! 📍'),
+            backgroundColor: const Color(0xFF2E7D32),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message']?.toString() ?? 'Failed to signal driver arrival.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
+  Future<void> _scanQrCodePass() async {
+    final qrTokenController = TextEditingController();
+
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      backgroundColor: Colors.white,
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Row(
+                children: [
+                  Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary, size: 26),
+                  SizedBox(width: 10),
+                  Text(
+                    'Scan / Verify QR Pass',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Scan passenger live QR Code Pass token or paste the pass code below:',
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: qrTokenController,
+                autofocus: true,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  hintText: 'e.g. ZAATRA-PASS-66129...',
+                  hintStyle: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+                  prefixIcon: const Icon(Icons.qr_code, color: AppColors.primary),
+                  filled: true,
+                  fillColor: const Color(0xFFF7F5FE),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () {
+                        final token = qrTokenController.text.trim();
+                        if (token.isEmpty) return;
+                        Navigator.pop(ctx, token);
+                      },
+                      child: const Text('Verify Pass', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (result == null || result.isEmpty) return;
+
+    try {
+      final res = await RideService.verifyQrPass(
+        token: result,
+        rideId: _rideId,
+      );
+
+      if (!mounted) return;
+
+      if (res['success'] == true) {
+        final customerName = res['customerName']?.toString() ?? 'Passenger';
+        final seatNum = res['seatNumber']?.toString() ?? '1';
+
+        setState(() {
+          // Find matching passenger if possible or mark first unboarded
+          bool matched = false;
+          for (var p in _passengers) {
+            if (p['name'] == customerName || p['bookingId'] == res['bookingId'] || p['expectedPin'] == res['boardingPin']) {
+              p['isBoarded'] = true;
+              matched = true;
+              break;
+            }
+          }
+          if (!matched && _passengers.isNotEmpty) {
+            final unboarded = _passengers.firstWhere((p) => p['isBoarded'] != true, orElse: () => _passengers.first);
+            unboarded['isBoarded'] = true;
+          }
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎉 Contactless QR Pass Verified! $customerName boarded (Seat $seatNum)'),
+            backgroundColor: const Color(0xFF2E7D32),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message']?.toString() ?? 'Invalid or expired QR pass.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Verification error: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
   void _openShareTrip() {
+    const totalSeats = 4;
+    final List<Map<String, dynamic>> seatsList = [];
+    for (int i = 0; i < totalSeats; i++) {
+      final isBooked = i < _passengers.length;
+      seatsList.add({
+        'label': isBooked ? 'S-${i + 1} Booked' : 'Available',
+        'isBooked': isBooked,
+      });
+    }
+
+    final driverName = widget.rideData?['driver']?['name'] ??
+        widget.rideData?['driverName'] ??
+        'Driver';
+    final driverCode = widget.rideData?['driver']?['driverCode'] ??
+        '#${_rideId.length > 4 ? _rideId.substring(_rideId.length - 4) : _rideId}';
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => DriverTripSharedScreen(
           rideId: _rideId,
           routeTimeline: _stops,
-          seatsAvailable: const [
-            {'label': 'S-1 Booked', 'isBooked': true},
-            {'label': 'S-2 Booked', 'isBooked': true},
-            {'label': 'S-3 Booked', 'isBooked': true},
-            {'label': 'Available', 'isBooked': false},
-          ],
-          fuelContribution: '₹358',
-          driverName: 'Rahul Siplivarma.k',
-          driverCode: '#1245',
-          bookingSeatZaatraId: '20124568',
+          seatsAvailable: seatsList,
+          fuelContribution: widget.rideData?['price'] != null ? '₹${widget.rideData!['price']}' : '₹358',
+          driverName: driverName,
+          driverCode: driverCode,
+          bookingSeatZaatraId: _rideId,
           nextPickup: {
-            'location': _stops.length > 1 ? _stops[1]['station'] : 'Ameerpet',
+            'location': _stops.length > 1 ? _stops[1]['station'] : _origin,
           },
         ),
       ),
@@ -579,7 +947,116 @@ class _DriverRideStartDetailsScreenState extends State<DriverRideStartDetailsScr
 
                   const SizedBox(height: 20),
 
-                  // Share Trip CTA Button
+                  // 5-Hour Start Ride Lock Status Banner (if locked)
+                  if (_startRideStatus.isLocked) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF8E1),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.orange.shade300),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.lock_clock_rounded, color: Colors.orange, size: 22),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Ride Start Locked (5-Hour Window)',
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF8D6E63)),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _startRideStatus.startRideAllowedFromFormatted.isNotEmpty
+                                      ? 'Unlocks: ${_startRideStatus.startRideAllowedFromFormatted}'
+                                      : 'Available 5 hours prior to scheduled departure',
+                                  style: const TextStyle(fontSize: 11, color: Color(0xFF6D4C41)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // 5-Hour Pre-Trip Alarm Status / Manual Trigger
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: _startRideStatus.preTripAlertSent ? const Color(0xFFE8F5E9) : const Color(0xFFF3EDF7),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _startRideStatus.preTripAlertSent ? const Color(0xFF81C784) : AppColors.border,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _startRideStatus.preTripAlertSent ? Icons.check_circle_rounded : Icons.alarm_on_rounded,
+                          color: _startRideStatus.preTripAlertSent ? const Color(0xFF2E7D32) : AppColors.primary,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _startRideStatus.preTripAlertSent
+                                ? '5-Hour Pre-Trip Alarm Dispatched ✓'
+                                : 'Pre-Trip Alarm (5h Auto-Alert)',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _startRideStatus.preTripAlertSent ? const Color(0xFF2E7D32) : AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        if (!_startRideStatus.preTripAlertSent)
+                          InkWell(
+                            onTap: _triggerPreTripAlert,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'Dispatch',
+                                style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // 1. I Have Arrived Notification Button
+                  CustomButton(
+                    text: 'I Have Arrived 📍',
+                    backgroundColor: const Color(0xFF2E7D32),
+                    textColor: Colors.white,
+                    onPressed: _notifyDriverArrived,
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // 2. Scan Contactless QR Pass Button
+                  CustomButton(
+                    text: 'Scan QR Code Pass 📷',
+                    isOutlined: true,
+                    backgroundColor: const Color(0xFFF3EDF7),
+                    textColor: AppColors.primary,
+                    onPressed: _scanQrCodePass,
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // 3. Share Trip Card Button
                   CustomButton(
                     text: 'Share Trip Card',
                     isOutlined: true,
@@ -590,16 +1067,26 @@ class _DriverRideStartDetailsScreenState extends State<DriverRideStartDetailsScr
 
                   const SizedBox(height: 12),
 
-                  // Start Google Maps Navigation CTA Button
+                  // 4. Start Ride Button
                   CustomButton(
-                    text: 'Start Navigation',
+                    text: 'Start Ride',
                     backgroundColor: AppColors.primary,
-                    onPressed: _startGoogleMapsNavigation,
+                    onPressed: _startRide,
                   ),
 
                   const SizedBox(height: 12),
 
-                  // Complete Ride Button
+                  // 5. Start Navigation Button
+                  CustomButton(
+                    text: 'Start Navigation',
+                    backgroundColor: const Color(0xFF0288D1),
+                    textColor: Colors.white,
+                    onPressed: () => _startGoogleMapsNavigation(force: true),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // 6. Complete Ride Button
                   CustomButton(
                     text: 'Complete Ride',
                     isOutlined: true,

@@ -9,17 +9,17 @@ import 'trip_preparation_drivers_screen_102.dart';
 class RideSearchMapScreen extends StatefulWidget {
   final String pickup;
   final String destination;
-  final String date;
-  final String time;
-  final String passengers;
+  final String? date;
+  final String? time;
+  final String? passengers;
 
   const RideSearchMapScreen({
     super.key,
-    this.pickup = 'Madhapur, Hyderabad',
-    this.destination = 'Secunderabad',
-    this.date = '20 May 2026',
-    this.time = '09:30 AM',
-    this.passengers = '3 Seats',
+    this.pickup = '',
+    this.destination = '',
+    this.date,
+    this.time,
+    this.passengers,
   });
 
   @override
@@ -29,25 +29,19 @@ class RideSearchMapScreen extends StatefulWidget {
 class _RideSearchMapScreenState extends State<RideSearchMapScreen> {
   late final TextEditingController _pickupController;
   late final TextEditingController _destinationController;
-  late String _date;
-  late String _time;
-  late String _passengers;
-  String _paidForSeat = '₹ 550';
-  String _luggage = '1 Medium Bag';
+  late final TextEditingController _doorstepPickupController;
+  late final TextEditingController _doorstepDropController;
 
-  LocationPoint _pickupLocation = const LocationPoint(
-    name: 'Madhapur',
-    formattedAddress: 'Madhapur, Hyderabad',
-    latitude: 17.4486,
-    longitude: 78.3908,
-  );
+  String? _date;
+  String? _time;
+  String? _passengers;
 
-  LocationPoint _destLocation = const LocationPoint(
-    name: 'Secunderabad',
-    formattedAddress: 'Secunderabad',
-    latitude: 17.4399,
-    longitude: 78.4983,
-  );
+  LocationPoint? _pickupLocation;
+  LocationPoint? _destLocation;
+
+  bool _isDoorstepEnabled = false;
+  bool _isFetchingDoorstepPickupCurrent = false;
+  bool _isFetchingDoorstepDropCurrent = false;
 
   RouteResult? _routeResult;
   bool _isLoadingRoute = false;
@@ -57,22 +51,27 @@ class _RideSearchMapScreenState extends State<RideSearchMapScreen> {
     super.initState();
     _pickupController = TextEditingController(text: widget.pickup);
     _destinationController = TextEditingController(text: widget.destination);
+    _doorstepPickupController = TextEditingController();
+    _doorstepDropController = TextEditingController();
     _date = widget.date;
     _time = widget.time;
     _passengers = widget.passengers;
-    _fetchDirections();
+    if (_pickupLocation != null && _destLocation != null) {
+      _fetchDirections();
+    }
   }
 
   Future<void> _fetchDirections() async {
+    if (_pickupLocation == null || _destLocation == null) return;
     setState(() {
       _isLoadingRoute = true;
     });
 
     final result = await GoogleMapsService.getDirections(
-      originLat: _pickupLocation.latitude,
-      originLng: _pickupLocation.longitude,
-      destLat: _destLocation.latitude,
-      destLng: _destLocation.longitude,
+      originLat: _pickupLocation!.latitude,
+      originLng: _pickupLocation!.longitude,
+      destLat: _destLocation!.latitude,
+      destLng: _destLocation!.longitude,
     );
 
     if (!mounted) return;
@@ -116,10 +115,66 @@ class _RideSearchMapScreenState extends State<RideSearchMapScreen> {
     }
   }
 
+  Future<void> _selectDoorstepPickupLocation() async {
+    final picked = await LocationAutocompletePickerModal.show(
+      context,
+      title: 'Select Doorstep Pickup Location',
+      initialQuery: _doorstepPickupController.text,
+      hintText: 'Search home address, street, or landmark...',
+    );
+
+    if (picked != null && mounted) {
+      setState(() {
+        _doorstepPickupController.text = picked.formattedAddress.isNotEmpty ? picked.formattedAddress : picked.name;
+      });
+    }
+  }
+
+  Future<void> _fetchCurrentForDoorstepPickup() async {
+    setState(() => _isFetchingDoorstepPickupCurrent = true);
+    final loc = await GoogleMapsService.getCurrentLocation();
+    if (!mounted) return;
+    setState(() {
+      _isFetchingDoorstepPickupCurrent = false;
+      if (loc != null) {
+        _doorstepPickupController.text = loc.formattedAddress.isNotEmpty ? loc.formattedAddress : loc.name;
+      }
+    });
+  }
+
+  Future<void> _selectDoorstepDropLocation() async {
+    final picked = await LocationAutocompletePickerModal.show(
+      context,
+      title: 'Select Doorstep Drop Location (Optional)',
+      initialQuery: _doorstepDropController.text,
+      hintText: 'Search drop address, street, or landmark...',
+    );
+
+    if (picked != null && mounted) {
+      setState(() {
+        _doorstepDropController.text = picked.formattedAddress.isNotEmpty ? picked.formattedAddress : picked.name;
+      });
+    }
+  }
+
+  Future<void> _fetchCurrentForDoorstepDrop() async {
+    setState(() => _isFetchingDoorstepDropCurrent = true);
+    final loc = await GoogleMapsService.getCurrentLocation();
+    if (!mounted) return;
+    setState(() {
+      _isFetchingDoorstepDropCurrent = false;
+      if (loc != null) {
+        _doorstepDropController.text = loc.formattedAddress.isNotEmpty ? loc.formattedAddress : loc.name;
+      }
+    });
+  }
+
   @override
   void dispose() {
     _pickupController.dispose();
     _destinationController.dispose();
+    _doorstepPickupController.dispose();
+    _doorstepDropController.dispose();
     super.dispose();
   }
 
@@ -213,7 +268,7 @@ class _RideSearchMapScreenState extends State<RideSearchMapScreen> {
                 const SizedBox(height: 14),
                 ...[1, 2, 3, 4, 5, 6].map((count) {
                   final label = '$count ${count == 1 ? 'Seat' : 'Seats'}';
-                  final isSelected = _passengers == label || _passengers.startsWith('$count ');
+                  final isSelected = _passengers == label || (_passengers?.startsWith('$count ') ?? false);
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: Container(
@@ -238,148 +293,6 @@ class _RideSearchMapScreenState extends State<RideSearchMapScreen> {
                     onTap: () {
                       setState(() {
                         _passengers = label;
-                      });
-                      Navigator.pop(ctx);
-                    },
-                  );
-                }),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _selectPaidForSeat(BuildContext context) {
-    final options = ['₹ 350', '₹ 450', '₹ 550', '₹ 700', '₹ 1000'];
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 44,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                const Text(
-                  'Select Target Budget per Seat',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                ),
-                const SizedBox(height: 14),
-                ...options.map((price) {
-                  final isSelected = _paidForSeat == price;
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: isSelected ? AppColors.primary : AppColors.inputBackground,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.currency_rupee_rounded, size: 20, color: isSelected ? Colors.white : AppColors.textSecondary),
-                    ),
-                    title: Text(
-                      price,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                        color: isSelected ? AppColors.primary : AppColors.textPrimary,
-                      ),
-                    ),
-                    trailing: isSelected
-                        ? const Icon(Icons.check_circle_rounded, color: AppColors.primary)
-                        : null,
-                    onTap: () {
-                      setState(() {
-                        _paidForSeat = price;
-                      });
-                      Navigator.pop(ctx);
-                    },
-                  );
-                }),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _selectLuggage(BuildContext context) {
-    final options = ['No Luggage', '1 Small Bag', '1 Medium Bag', '2 Bags (Medium)', 'Heavy / Large Luggage'];
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 44,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                const Text(
-                  'Select Luggage Size',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                ),
-                const SizedBox(height: 14),
-                ...options.map((luggage) {
-                  final isSelected = _luggage == luggage || _luggage.startsWith(luggage);
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: isSelected ? AppColors.primary : AppColors.inputBackground,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.luggage_rounded, size: 20, color: isSelected ? Colors.white : AppColors.textSecondary),
-                    ),
-                    title: Text(
-                      luggage,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                        color: isSelected ? AppColors.primary : AppColors.textPrimary,
-                      ),
-                    ),
-                    trailing: isSelected
-                        ? const Icon(Icons.check_circle_rounded, color: AppColors.primary)
-                        : null,
-                    onTap: () {
-                      setState(() {
-                        _luggage = luggage;
                       });
                       Navigator.pop(ctx);
                     },
@@ -434,6 +347,7 @@ class _RideSearchMapScreenState extends State<RideSearchMapScreen> {
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(20.0),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Pickup Location Field
                         InkWell(
@@ -509,54 +423,31 @@ class _RideSearchMapScreenState extends State<RideSearchMapScreen> {
                           ),
                         ),
 
-                        const SizedBox(height: 16),
-
-                        // Interactive Route Map Container matching 44.png
-                        Container(
-                          height: 180,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE8DEF8),
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          child: Stack(
-                            children: [
-                              Center(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(12),
-                                    boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],
+                        if (_isLoadingRoute || _routeResult != null) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3EDF7),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppColors.primary.withAlpha(50)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.directions_car_rounded, color: AppColors.primary, size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _isLoadingRoute
+                                        ? 'Calculating route...'
+                                        : '${_routeResult!.durationText} (${_routeResult!.distanceText})',
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary),
                                   ),
-                                  child: _isLoadingRoute
-                                      ? Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: const [
-                                            SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
-                                            SizedBox(width: 8),
-                                            Text('Calculating route...', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                                          ],
-                                        )
-                                      : Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Icon(Icons.directions_car_rounded, color: AppColors.primary, size: 18),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              _routeResult != null
-                                                  ? '${_routeResult!.durationText} (${_routeResult!.distanceText})'
-                                                  : 'Route Ready',
-                                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                                            ),
-                                          ],
-                                        ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
+                        ],
 
                         const SizedBox(height: 16),
 
@@ -566,14 +457,14 @@ class _RideSearchMapScreenState extends State<RideSearchMapScreen> {
                             Expanded(
                               child: GestureDetector(
                                 onTap: () => _selectDate(context),
-                                child: _buildPickerCard(title: 'Date', value: _date, icon: Icons.calendar_month_rounded),
+                                child: _buildPickerCard(title: 'Date', value: _date, placeholder: 'Date', icon: Icons.calendar_month_rounded),
                               ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: GestureDetector(
                                 onTap: () => _selectTime(context),
-                                child: _buildPickerCard(title: 'Time', value: _time, icon: Icons.access_time_rounded),
+                                child: _buildPickerCard(title: 'Time', value: _time, placeholder: 'Time', icon: Icons.access_time_rounded),
                               ),
                             ),
                           ],
@@ -581,30 +472,9 @@ class _RideSearchMapScreenState extends State<RideSearchMapScreen> {
 
                         const SizedBox(height: 12),
 
-                        // Passengers & Price Row matching 44.png
-                        Row(
-                          children: [
-                            Expanded(
-                              child: GestureDetector(
-                                onTap: () => _selectPassengers(context),
-                                child: _buildPickerCard(title: 'Passengers', value: _passengers, icon: Icons.airline_seat_recline_normal_rounded),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: GestureDetector(
-                                onTap: () => _selectPaidForSeat(context),
-                                child: _buildPickerCard(title: 'Paid for seat', value: _paidForSeat, icon: Icons.currency_rupee_rounded),
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        // Luggage Card matching 44.png
+                        // Passengers Card
                         GestureDetector(
-                          onTap: () => _selectLuggage(context),
+                          onTap: () => _selectPassengers(context),
                           child: Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(14),
@@ -619,39 +489,200 @@ class _RideSearchMapScreenState extends State<RideSearchMapScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      const Text('Luggage', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                                      const Text('Passengers', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                                       const SizedBox(height: 4),
-                                      Text(_luggage, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                                      Text(
+                                        _passengers != null && _passengers!.isNotEmpty ? _passengers! : 'Seats',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: _passengers != null && _passengers!.isNotEmpty ? FontWeight.bold : FontWeight.normal,
+                                          color: _passengers != null && _passengers!.isNotEmpty ? AppColors.textPrimary : AppColors.textSecondary,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
-                                const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary, size: 20),
+                                const Icon(Icons.airline_seat_recline_normal_rounded, color: AppColors.textSecondary, size: 20),
                               ],
                             ),
                           ),
                         ),
+
+                        const SizedBox(height: 14),
+
+                        // Doorstep Pickup & Drop Checkbox (Directly below Passengers)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _isDoorstepEnabled ? const Color(0xFFF7F5FE) : const Color(0xFFFAFAFA),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: _isDoorstepEnabled ? AppColors.primary.withAlpha(60) : AppColors.border,
+                              width: _isDoorstepEnabled ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Checkbox(
+                                value: _isDoorstepEnabled,
+                                activeColor: AppColors.primary,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+                                onChanged: (val) {
+                                  setState(() {
+                                    _isDoorstepEnabled = val ?? false;
+                                  });
+                                },
+                              ),
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      _isDoorstepEnabled = !_isDoorstepEnabled;
+                                    });
+                                  },
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Doorstep Pickup & Drop',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Get picked up / dropped right at your location',
+                                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Conditional Doorstep Pickup and Drop Location Fields
+                        if (_isDoorstepEnabled) ...[
+                          const SizedBox(height: 16),
+
+                          // 1. Doorstep Pickup Location (Required)
+                          _buildDoorstepLocationTile(
+                            label: 'Doorstep Pickup Location',
+                            isRequired: true,
+                            controller: _doorstepPickupController,
+                            pinIcon: Icons.my_location_rounded,
+                            pinColor: const Color(0xFF4CAF50),
+                            placeholder: 'Tap to search pickup address or landmark',
+                            onTapSearch: _selectDoorstepPickupLocation,
+                            onTapUseCurrent: _fetchCurrentForDoorstepPickup,
+                            isFetchingCurrent: _isFetchingDoorstepPickupCurrent,
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          // 2. Doorstep Drop Location (Optional)
+                          _buildDoorstepLocationTile(
+                            label: 'Doorstep Drop Location',
+                            isRequired: false,
+                            controller: _doorstepDropController,
+                            pinIcon: Icons.location_on_rounded,
+                            pinColor: const Color(0xFFE53935),
+                            placeholder: 'Tap to search drop address or landmark (Optional)',
+                            onTapSearch: _selectDoorstepDropLocation,
+                            onTapUseCurrent: _fetchCurrentForDoorstepDrop,
+                            isFetchingCurrent: _isFetchingDoorstepDropCurrent,
+                          ),
+                        ],
                       ],
                     ),
                   ),
                 ),
 
-                // Bottom Search Ride CTA matching 44.png
+                // Bottom Search Ride CTA
                 Padding(
                   padding: const EdgeInsets.all(20.0),
                   child: CustomButton(
                     text: 'Search ride',
                     onPressed: () {
+                      final pickupText = _pickupController.text.trim();
+                      final destText = _destinationController.text.trim();
+
+                      if (pickupText.isEmpty || destText.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please select both pickup location and destination.'),
+                            backgroundColor: Colors.redAccent,
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                        return;
+                      }
+
+                      if (_date == null || _date!.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please select date.'),
+                            backgroundColor: Colors.redAccent,
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                        return;
+                      }
+
+                      if (_time == null || _time!.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please select time.'),
+                            backgroundColor: Colors.redAccent,
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                        return;
+                      }
+
+                      if (_passengers == null || _passengers!.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please select number of passengers.'),
+                            backgroundColor: Colors.redAccent,
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                        return;
+                      }
+
+                      // Doorstep Pickup Validation
+                      if (_isDoorstepEnabled) {
+                        final doorstepPickupText = _doorstepPickupController.text.trim();
+                        if (doorstepPickupText.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Please provide a Doorstep Pickup Location.'),
+                              backgroundColor: Colors.redAccent,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                          return;
+                        }
+                      }
+
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (context) => TripPreparationDriversScreen(
-                            pickup: _pickupController.text,
-                            destination: _destinationController.text,
-                            date: _date,
-                            time: _time,
-                            passengers: _passengers,
-                            paidForSeat: _paidForSeat,
-                            luggage: _luggage,
+                            pickup: pickupText,
+                            destination: destText,
+                            date: _date ?? '',
+                            time: _time ?? '',
+                            passengers: _passengers ?? '1 Seat',
+                            isDoorstepEnabled: _isDoorstepEnabled,
+                            doorstepPickup: _isDoorstepEnabled ? _doorstepPickupController.text.trim() : null,
+                            doorstepDrop: _isDoorstepEnabled && _doorstepDropController.text.trim().isNotEmpty
+                                ? _doorstepDropController.text.trim()
+                                : null,
                           ),
                         ),
                       );
@@ -666,7 +697,133 @@ class _RideSearchMapScreenState extends State<RideSearchMapScreen> {
     );
   }
 
-  Widget _buildPickerCard({required String title, required String value, IconData? icon}) {
+  Widget _buildDoorstepLocationTile({
+    required String label,
+    required bool isRequired,
+    required TextEditingController controller,
+    required IconData pinIcon,
+    required Color pinColor,
+    required String placeholder,
+    required VoidCallback onTapSearch,
+    required VoidCallback onTapUseCurrent,
+    required bool isFetchingCurrent,
+  }) {
+    final hasValue = controller.text.isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFA),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: hasValue ? AppColors.primary.withAlpha(60) : AppColors.border,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(pinIcon, color: pinColor, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    label,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  ),
+                  if (isRequired) ...[
+                    const SizedBox(width: 4),
+                    const Text('*', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13)),
+                  ],
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isRequired ? Colors.red.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  isRequired ? 'Required' : 'Optional',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: isRequired ? Colors.red : AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          InkWell(
+            onTap: onTapSearch,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE0E0E0)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      hasValue ? controller.text : placeholder,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: hasValue ? FontWeight.bold : FontWeight.normal,
+                        color: hasValue ? AppColors.textPrimary : AppColors.textMuted,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.search_rounded, size: 18, color: AppColors.primary),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // "Use My Current Location" quick action chip
+          InkWell(
+            onTap: isFetchingCurrent ? null : onTapUseCurrent,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F5FE),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isFetchingCurrent) ...[
+                    const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                    ),
+                    const SizedBox(width: 6),
+                    const Text('Locating...', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                  ] else ...[
+                    const Icon(Icons.my_location_rounded, size: 14, color: AppColors.primary),
+                    const SizedBox(width: 6),
+                    const Text('Use My Current Location', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPickerCard({required String title, required String? value, String placeholder = '', IconData? icon}) {
+    final hasValue = value != null && value.isNotEmpty;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -683,8 +840,12 @@ class _RideSearchMapScreenState extends State<RideSearchMapScreen> {
                 Text(title, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                 const SizedBox(height: 4),
                 Text(
-                  value,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  hasValue ? value : placeholder,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: hasValue ? FontWeight.bold : FontWeight.normal,
+                    color: hasValue ? AppColors.textPrimary : AppColors.textSecondary,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),

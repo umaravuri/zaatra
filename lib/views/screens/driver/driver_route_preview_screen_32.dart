@@ -4,8 +4,8 @@ import '../../../models/intermediate_pickup_model.dart';
 import '../../../models/place_location_model.dart';
 import '../../../services/google_maps_service.dart';
 import '../../widgets/custom_button.dart';
-import '../../widgets/location_autocomplete_picker_modal.dart';
-import '../../widgets/route_map_webview.dart';
+// import '../../widgets/location_autocomplete_picker_modal.dart';
+// import '../../widgets/route_map_webview.dart';
 import 'driver_customer_preferences_screen_93.dart';
 
 class DriverRoutePreviewScreen extends StatefulWidget {
@@ -19,6 +19,11 @@ class DriverRoutePreviewScreen extends StatefulWidget {
   final String? fare;
   final String? luggage;
   final String? preference;
+  final double? basePricePerKm;
+  final double? pricePerSeat;
+  final bool? offerDoorstepPickupDrop;
+  final double? detourRadiusKm;
+  final double? detourRatePerKm;
   final List<IntermediatePickupModel>? intermediatePickups;
 
   const DriverRoutePreviewScreen({
@@ -33,6 +38,11 @@ class DriverRoutePreviewScreen extends StatefulWidget {
     this.fare,
     this.luggage,
     this.preference,
+    this.basePricePerKm,
+    this.pricePerSeat,
+    this.offerDoorstepPickupDrop,
+    this.detourRadiusKm,
+    this.detourRatePerKm,
     this.intermediatePickups,
   });
 
@@ -93,6 +103,7 @@ class _DriverRoutePreviewScreenState extends State<DriverRoutePreviewScreen> {
     });
   }
 
+  /*
   Future<void> _searchAlongRoute(String category) async {
     final picked = await LocationAutocompletePickerModal.show(
       context,
@@ -110,6 +121,7 @@ class _DriverRoutePreviewScreenState extends State<DriverRoutePreviewScreen> {
       );
     }
   }
+  */
 
   Future<void> _goToNext() async {
     // Parse seats count
@@ -179,8 +191,12 @@ class _DriverRoutePreviewScreenState extends State<DriverRoutePreviewScreen> {
       'distance': displayDistance,
       'seats': seatCount,
       'booked': 0,
-      'price': parsedFare,
-      'pricePerSeat': parsedFare,
+      'price': widget.pricePerSeat ?? parsedFare,
+      'pricePerSeat': widget.pricePerSeat ?? parsedFare,
+      'basePricePerKm': widget.basePricePerKm ?? 10.0,
+      'offerDoorstepPickupDrop': widget.offerDoorstepPickupDrop ?? false,
+      'detourRadiusKm': widget.detourRadiusKm ?? 0.0,
+      'detourRatePerKm': widget.detourRatePerKm ?? 0.0,
       'maxLuggagePerPassenger': 2,
       'departs': widget.selectedDateTime?.toIso8601String() ?? widget.date ?? DateTime.now().add(const Duration(days: 1)).toIso8601String(),
       'date': widget.selectedDateTime?.toIso8601String() ?? widget.date ?? DateTime.now().add(const Duration(days: 1)).toIso8601String(),
@@ -201,8 +217,8 @@ class _DriverRoutePreviewScreenState extends State<DriverRoutePreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final displayDistance = _routeResult?.distanceText ?? '15.4 km';
-    final displayDuration = _routeResult?.durationText ?? '40 min';
+    final displayDistance = _isLoadingRoute ? 'Calculating...' : (_routeResult?.distanceText ?? '15.4 km');
+    final displayDuration = _isLoadingRoute ? 'Calculating...' : (_routeResult?.durationText ?? '40 min');
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -339,9 +355,8 @@ class _DriverRoutePreviewScreenState extends State<DriverRoutePreviewScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 16),
-
-                  // Enlarged Live Interactive Route Map Box matching Image 3
+                  // Map route container (commented out for now)
+                  /*
                   SizedBox(
                     height: 380,
                     width: double.infinity,
@@ -402,6 +417,7 @@ class _DriverRoutePreviewScreenState extends State<DriverRoutePreviewScreen> {
                   ),
 
                   const SizedBox(height: 16),
+                  */
 
                   // Distance & Duration Metrics Row matching Image 3
                   Row(
@@ -432,6 +448,7 @@ class _DriverRoutePreviewScreenState extends State<DriverRoutePreviewScreen> {
     );
   }
 
+  /*
   Widget _buildMapChip(IconData icon, String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -449,6 +466,7 @@ class _DriverRoutePreviewScreenState extends State<DriverRoutePreviewScreen> {
       ),
     );
   }
+  */
 
   Widget _buildMetricCard(String label, String value) {
     return Container(

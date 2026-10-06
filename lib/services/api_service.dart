@@ -1,19 +1,17 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/config/app_env.dart';
 
 class ApiService {
-  static const String localUrl = 'http://localhost:5000/api';
-  static const String tunnelUrl = 'https://qvxd0wjl-5000.inc1.devtunnels.ms/api';
+  /// Base API URL dynamically fetched from AppEnv (.env or fallback)
+  static String get baseUrl => AppEnv.baseUrl;
 
-  // Base URL pointing to public VS Code devtunnel for mobile testing
-  static String get baseUrl {
-    if (kIsWeb) {
-      return localUrl;
-    }
-    return tunnelUrl;
-  }
+  /// Server root URL (without '/api' suffix), used for relative media/uploads URLs
+  static String get serverBaseUrl => baseUrl.replaceAll('/api', '');
+
+  /// Backwards-compatibility alias for server root URL
+  static String get tunnelUrl => serverBaseUrl;
 
   static Future<Map<String, String>> _getHeaders({String? token}) async {
     final headers = <String, String>{
@@ -163,6 +161,47 @@ class ApiService {
         url,
         headers: headers,
         body: jsonEncode(body),
+      );
+
+      dynamic data;
+      try {
+        data = jsonDecode(response.body);
+      } catch (_) {
+        data = {'message': response.body};
+      }
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return {
+          'success': true,
+          'statusCode': response.statusCode,
+          'data': data,
+          if (data is Map<String, dynamic>) ...data,
+        };
+      } else {
+        return {
+          'success': false,
+          'statusCode': response.statusCode,
+          'message': (data is Map ? data['message'] : null) ?? 'Request failed with status ${response.statusCode}',
+          'data': data,
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Connection error: Could not reach backend server at $baseUrl.',
+        'error': e.toString(),
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> delete(String endpoint, {Map<String, dynamic>? body, String? token}) async {
+    try {
+      final headers = await _getHeaders(token: token);
+      final url = Uri.parse('$baseUrl$endpoint');
+      final response = await http.delete(
+        url,
+        headers: headers,
+        body: body != null ? jsonEncode(body) : null,
       );
 
       dynamic data;

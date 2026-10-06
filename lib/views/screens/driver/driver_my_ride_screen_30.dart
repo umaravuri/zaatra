@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +7,7 @@ import '../../../models/place_location_model.dart';
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/google_maps_service.dart';
+import '../../../services/ride_service.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/location_autocomplete_picker_modal.dart';
 import 'driver_intermediate_pickups_screen.dart';
@@ -24,21 +26,24 @@ class _DriverMyRideScreenState extends State<DriverMyRideScreen> {
   RouteResult? _routeResult;
   bool _isLoadingRoute = false;
 
-  late DateTime _selectedDateTime;
-  String _date = '20 May 2026';
-  String _time = '09:00 AM';
-  String _seats = '3 Seats';
-  final TextEditingController _fareController = TextEditingController(text: '500');
+  DateTime? _selectedDateTime;
+  String? _date;
+  String? _time;
+  String? _seats;
+  
+  // Pricing State
+  final TextEditingController _basePriceController = TextEditingController(text: '10');
+  double _calculatedPricePerSeat = 0;
+  double _tripDistanceKm = 0;
+  bool _isCalculatingPrice = false;
+  Timer? _debounceTimer;
+
   String _luggage = '1 Medium Bag';
   List<Map<String, dynamic>> _existingDriverRides = [];
 
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    _selectedDateTime = DateTime(now.year, now.month, now.day);
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    _date = '${now.day} ${months[now.month - 1]} ${now.year}';
     _loadExistingDriverRides();
   }
 
@@ -71,8 +76,49 @@ class _DriverMyRideScreenState extends State<DriverMyRideScreen> {
 
   @override
   void dispose() {
-    _fareController.dispose();
+    _debounceTimer?.cancel();
+    _basePriceController.dispose();
     super.dispose();
+  }
+
+  Future<void> _recalculateBackendPrice() async {
+    final basePrice = double.tryParse(_basePriceController.text.trim()) ?? 0.0;
+    if (_tripDistanceKm <= 0 || basePrice <= 0) {
+      if (mounted) {
+        setState(() {
+          _calculatedPricePerSeat = 0;
+        });
+      }
+      return;
+    }
+
+    setState(() {
+      _isCalculatingPrice = true;
+    });
+
+    final res = await RideService.calculatePricePerSeat(
+      distanceKm: _tripDistanceKm,
+      basePricePerKm: basePrice,
+      from: _pickupLocation?.name,
+      to: _destLocation?.name,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _isCalculatingPrice = false;
+      if (res['success'] == true && res['pricePerSeat'] != null) {
+        _calculatedPricePerSeat = (res['pricePerSeat'] as num).toDouble();
+      } else {
+        _calculatedPricePerSeat = (_tripDistanceKm * basePrice).roundToDouble();
+      }
+    });
+  }
+
+  void _onBasePriceChanged(String val) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      _recalculateBackendPrice();
+    });
   }
 
   Future<void> _fetchDirections() async {
@@ -94,8 +140,17 @@ class _DriverMyRideScreenState extends State<DriverMyRideScreen> {
       _isLoadingRoute = false;
       if (result != null) {
         _routeResult = result;
+        if (result.distanceMeters > 0) {
+          _tripDistanceKm = (result.distanceMeters / 1000.0);
+        } else {
+          _tripDistanceKm = double.tryParse(result.distanceText.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
+        }
       }
     });
+
+    if (result != null && _tripDistanceKm > 0) {
+      _recalculateBackendPrice();
+    }
   }
 
   Future<void> _selectPickup() async {
@@ -452,14 +507,14 @@ class _DriverMyRideScreenState extends State<DriverMyRideScreen> {
                       Expanded(
                         child: GestureDetector(
                           onTap: () => _selectDate(context),
-                          child: _buildInfoCard('Select Date', _date, icon: Icons.calendar_month_rounded),
+                          child: _buildInfoCard('Select Date', _date, placeholder: 'Date', icon: Icons.calendar_month_rounded),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: GestureDetector(
                           onTap: () => _selectTime(context),
-                          child: _buildInfoCard('Start Time', _time, icon: Icons.access_time_rounded),
+                          child: _buildInfoCard('Start Time', _time, placeholder: 'Time', icon: Icons.access_time_rounded),
                         ),
                       ),
                     ],
@@ -467,19 +522,34 @@ class _DriverMyRideScreenState extends State<DriverMyRideScreen> {
 
                   const SizedBox(height: 12),
 
-                  // Available Seats & Paid for seat (Direct Numeric Input)
+                  // Available Seats & Luggage Row
                   Row(
                     children: [
                       Expanded(
                         child: GestureDetector(
                           onTap: () => _selectSeats(context),
-                          child: _buildInfoCard('Available Seats', _seats, icon: Icons.airline_seat_recline_normal_rounded),
+                          child: _buildInfoCard('Available Seats', _seats, placeholder: 'Seats', icon: Icons.airline_seat_recline_normal_rounded),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
+                        child: GestureDetector(
+                          onTap: () => _selectLuggage(context),
+                          child: _buildInfoCard('Luggage', _luggage, placeholder: 'Luggage', icon: Icons.luggage_rounded),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // 💰 Pricing Row: Base Price / km / seat & Calculated Price per Seat
+                  Row(
+                    children: [
+                      // Base Price per km per seat Input Card
+                      Expanded(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFAFAFA),
                             borderRadius: BorderRadius.circular(14),
@@ -488,28 +558,77 @@ class _DriverMyRideScreenState extends State<DriverMyRideScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Paid for seat', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                              const SizedBox(height: 2),
+                              const Text(
+                                'Base Price / km / seat',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
                               Row(
                                 children: [
                                   const Text('₹ ', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                                   Expanded(
                                     child: TextField(
-                                      controller: _fareController,
-                                      keyboardType: TextInputType.number,
-                                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                      controller: _basePriceController,
+                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                                      onChanged: _onBasePriceChanged,
                                       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                                       decoration: const InputDecoration(
                                         border: InputBorder.none,
                                         isDense: true,
-                                        contentPadding: EdgeInsets.symmetric(vertical: 4),
-                                        hintText: '500',
-                                        hintStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+                                        contentPadding: EdgeInsets.symmetric(vertical: 2),
+                                        hintText: '10',
+                                        hintStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.normal, color: AppColors.textSecondary),
                                       ),
                                     ),
                                   ),
-                                  const Icon(Icons.edit_outlined, size: 16, color: AppColors.textSecondary),
+                                  const Text('/ km', style: TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
                                 ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(width: 12),
+
+                      // Price per Seat Display Card (Backend Calculated with subtext)
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF9F7FC),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Price per Seat',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary),
+                              ),
+                              const SizedBox(height: 3),
+                              _isCalculatingPrice
+                                  ? const SizedBox(
+                                      height: 18,
+                                      width: 18,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                                    )
+                                  : Text(
+                                      '₹ ${_calculatedPricePerSeat > 0 ? _calculatedPricePerSeat.toStringAsFixed(0) : '0'}',
+                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                    ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _tripDistanceKm > 0 && (double.tryParse(_basePriceController.text.trim()) ?? 0) > 0
+                                    ? '${_tripDistanceKm.toStringAsFixed(_tripDistanceKm.truncateToDouble() == _tripDistanceKm ? 0 : 1)} kms x ${_basePriceController.text.trim()}rs'
+                                    : '-- kms x -- rs',
+                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
                           ),
@@ -518,17 +637,9 @@ class _DriverMyRideScreenState extends State<DriverMyRideScreen> {
                     ],
                   ),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 24),
 
-                  // Luggage Field
-                  GestureDetector(
-                    onTap: () => _selectLuggage(context),
-                    child: _buildInfoCard('Luggage', _luggage, isFullWidth: true, icon: Icons.luggage_rounded),
-                  ),
-
-                  const SizedBox(height: 28),
-
-                  // Next Button -> Intermediate Pickups Screen
+                  // Next Button
                   CustomButton(
                     text: 'Next',
                     onPressed: _handleNext,
@@ -554,6 +665,52 @@ class _DriverMyRideScreenState extends State<DriverMyRideScreen> {
       return;
     }
 
+    if (_date == null || _selectedDateTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select date.'),
+          backgroundColor: Colors.redAccent,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    if (_time == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select start time.'),
+          backgroundColor: Colors.redAccent,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    if (_seats == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select available seats.'),
+          backgroundColor: Colors.redAccent,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final basePrice = double.tryParse(_basePriceController.text.trim()) ?? 0;
+    if (_basePriceController.text.trim().isEmpty || basePrice <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid base price per km.'),
+          backgroundColor: Colors.redAccent,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+
     // Check duplicate ride date
     Map<String, dynamic>? duplicateRide;
     for (final ride in _existingDriverRides) {
@@ -578,10 +735,10 @@ class _DriverMyRideScreenState extends State<DriverMyRideScreen> {
         }
       }
 
-      if (rideDate != null) {
-        if (rideDate.year == _selectedDateTime.year &&
-            rideDate.month == _selectedDateTime.month &&
-            rideDate.day == _selectedDateTime.day) {
+      if (rideDate != null && _selectedDateTime != null) {
+        if (rideDate.year == _selectedDateTime!.year &&
+            rideDate.month == _selectedDateTime!.month &&
+            rideDate.day == _selectedDateTime!.day) {
           duplicateRide = ride;
           break;
         }
@@ -594,7 +751,7 @@ class _DriverMyRideScreenState extends State<DriverMyRideScreen> {
       final time = duplicateRide['departureTime'] ?? '';
 
       _showDuplicateRideDialog(
-        dateStr: _date,
+        dateStr: _date ?? '',
         routeSummary: '$pickup ➔ $destination${time.isNotEmpty ? " ($time)" : ""}',
       );
     } else {
@@ -705,8 +862,11 @@ class _DriverMyRideScreenState extends State<DriverMyRideScreen> {
   }
 
   void _navigateToIntermediatePickups() {
-    final enteredFare = _fareController.text.trim();
-    final formattedFare = enteredFare.isNotEmpty ? '₹ $enteredFare' : '₹ 500';
+    final basePrice = double.tryParse(_basePriceController.text.trim()) ?? 10.0;
+    final finalPricePerSeat = _calculatedPricePerSeat > 0
+        ? _calculatedPricePerSeat
+        : ((_tripDistanceKm > 0 ? _tripDistanceKm : 10.0) * basePrice).roundToDouble();
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -718,12 +878,15 @@ class _DriverMyRideScreenState extends State<DriverMyRideScreen> {
           selectedDateTime: _selectedDateTime,
           time: _time,
           seats: _seats,
-          fare: formattedFare,
+          fare: '₹ ${finalPricePerSeat.toStringAsFixed(0)}',
           luggage: _luggage,
+          basePricePerKm: basePrice,
+          pricePerSeat: finalPricePerSeat,
         ),
       ),
     );
   }
+
 
   Widget _buildLocationCard({
     required String label,
@@ -768,7 +931,8 @@ class _DriverMyRideScreenState extends State<DriverMyRideScreen> {
     );
   }
 
-  Widget _buildInfoCard(String label, String value, {bool isFullWidth = false, IconData? icon}) {
+  Widget _buildInfoCard(String label, String? value, {String placeholder = '', bool isFullWidth = false, IconData? icon}) {
+    final hasValue = value != null && value.isNotEmpty;
     return Container(
       width: isFullWidth ? double.infinity : null,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -786,8 +950,12 @@ class _DriverMyRideScreenState extends State<DriverMyRideScreen> {
                 Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                 const SizedBox(height: 4),
                 Text(
-                  value,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  hasValue ? value : placeholder,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: hasValue ? FontWeight.bold : FontWeight.normal,
+                    color: hasValue ? AppColors.textPrimary : AppColors.textSecondary,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),

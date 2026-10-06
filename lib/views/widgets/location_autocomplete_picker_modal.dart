@@ -10,11 +10,11 @@ class LocationAutocompletePickerModal extends StatefulWidget {
   final String hintText;
 
   const LocationAutocompletePickerModal({
-    Key? key,
+    super.key,
     this.title = 'Select Location',
     this.initialQuery = '',
     this.hintText = 'Search area, landmark, or street...',
-  }) : super(key: key);
+  });
 
   static Future<LocationPoint?> show(
     BuildContext context, {
@@ -118,107 +118,175 @@ class _LocationAutocompletePickerModalState extends State<LocationAutocompletePi
     }
   }
 
+  Future<void> _onUseCurrentLocation() async {
+    setState(() {
+      _isResolvingDetails = true;
+    });
+
+    final loc = await GoogleMapsService.getCurrentLocation();
+    if (!mounted) return;
+    setState(() {
+      _isResolvingDetails = false;
+    });
+
+    if (loc != null) {
+      Navigator.pop(context, loc);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final keyboardPadding = MediaQuery.of(context).viewInsets.bottom;
 
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
-      padding: EdgeInsets.only(bottom: keyboardPadding),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        children: [
-          const SizedBox(height: 12),
-          // Drag Handle
-          Container(
-            width: 44,
-            height: 5,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(10),
+    return Material(
+      color: Colors.white,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.85,
+        padding: EdgeInsets.only(bottom: keyboardPadding),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            // Drag Handle
+            Container(
+              width: 44,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // Header
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    widget.title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+            // Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-          ),
-
-          // Search Bar
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFFAFAFA),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.primary.withAlpha(50)),
-              ),
-              child: TextField(
-                controller: _searchController,
-                autofocus: true,
-                onChanged: _onQueryChanged,
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                decoration: InputDecoration(
-                  hintText: widget.hintText,
-                  hintStyle: const TextStyle(fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.normal),
-                  prefixIcon: const Icon(Icons.search_rounded, color: AppColors.primary),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear_rounded, color: AppColors.textSecondary, size: 20),
-                          onPressed: () {
-                            _searchController.clear();
-                            _onQueryChanged('');
-                          },
-                        )
-                      : null,
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
               ),
             ),
-          ),
 
-          if (_isLoading || _isResolvingDetails)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(
-                child: SizedBox(
-                  width: 28,
-                  height: 28,
-                  child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.primary),
+            // Search Bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFAFAFA),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.primary.withAlpha(50)),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  onChanged: _onQueryChanged,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  decoration: InputDecoration(
+                    hintText: widget.hintText,
+                    hintStyle: const TextStyle(fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.normal),
+                    prefixIcon: const Icon(Icons.search_rounded, color: AppColors.primary),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear_rounded, color: AppColors.textSecondary, size: 20),
+                            onPressed: () {
+                              _searchController.clear();
+                              _onQueryChanged('');
+                            },
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
                 ),
               ),
             ),
 
-          // Results / Suggestions List
-          Expanded(
-            child: _searchController.text.trim().isNotEmpty
-                ? _buildSearchResults()
-                : _buildEmptyState(),
-          ),
-        ],
+            // Use Current Location Option
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+              child: InkWell(
+                onTap: _onUseCurrentLocation,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F5FE),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.primary.withAlpha(40)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withAlpha(20),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.my_location_rounded, color: AppColors.primary, size: 18),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Use My Current Location',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Fetch live device location',
+                              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.primary),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            if (_isLoading || _isResolvingDetails)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.primary),
+                  ),
+                ),
+              ),
+
+            // Results / Suggestions List
+            Expanded(
+              child: _searchController.text.trim().isNotEmpty
+                  ? _buildSearchResults()
+                  : _buildEmptyState(),
+            ),
+          ],
+        ),
       ),
     );
   }

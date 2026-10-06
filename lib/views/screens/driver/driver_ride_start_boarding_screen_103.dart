@@ -4,7 +4,7 @@ import '../../widgets/custom_button.dart';
 import 'driver_on_trip_progress_screen_108.dart';
 
 class DriverRideStartBoardingScreen extends StatelessWidget {
-  const DriverRideStartBoardingScreen({Key? key}) : super(key: key);
+  const DriverRideStartBoardingScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +49,7 @@ class DriverRideStartBoardingScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Route Box matching 103.png
+                    // Route Box
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -57,11 +57,11 @@ class DriverRideStartBoardingScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(color: AppColors.border),
                       ),
-                      child: Column(
+                      child: const Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
-                            children: const [
+                            children: [
                               Text('Madhapur', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                               SizedBox(width: 12),
                               Icon(Icons.arrow_forward_rounded, color: AppColors.textSecondary, size: 18),
@@ -69,22 +69,22 @@ class DriverRideStartBoardingScreen extends StatelessWidget {
                               Text('Secundrabad', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                             ],
                           ),
-                          const SizedBox(height: 6),
-                          const Text('20 May 2024 - 09 : 00 AM', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                          SizedBox(height: 6),
+                          Text('20 May 2024 - 09 : 00 AM', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                         ],
                       ),
                     ),
 
                     const SizedBox(height: 20),
 
-                    // Pickup Pin Row matching 103.png
-                    Row(
+                    // Pickup Pin Row
+                    const Row(
                       children: [
-                        const Icon(Icons.circle, color: Color(0xFF4CAF50), size: 16),
-                        const SizedBox(width: 12),
+                        Icon(Icons.circle, color: Color(0xFF4CAF50), size: 16),
+                        SizedBox(width: 12),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
+                          children: [
                             Text('Pickup location', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                             SizedBox(height: 2),
                             Text('Madhapur , Hyderabad', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
@@ -95,14 +95,14 @@ class DriverRideStartBoardingScreen extends StatelessWidget {
 
                     const SizedBox(height: 14),
 
-                    // Destination Pin Row matching 103.png
-                    Row(
+                    // Destination Pin Row
+                    const Row(
                       children: [
-                        const Icon(Icons.circle, color: Color(0xFFE53935), size: 16),
-                        const SizedBox(width: 12),
+                        Icon(Icons.circle, color: Color(0xFFE53935), size: 16),
+                        SizedBox(width: 12),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
+                          children: [
                             Text('Destination', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                             SizedBox(height: 2),
                             Text('Secundrabad', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
@@ -113,19 +113,19 @@ class DriverRideStartBoardingScreen extends StatelessWidget {
 
                     const SizedBox(height: 24),
 
-                    Row(
+                    const Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: const [
+                      children: [
                         Text('Passengers', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                        Text('3/3 Boarded', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+                        Text('No passengers boarded', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
                       ],
                     ),
 
                     const SizedBox(height: 14),
 
-                    // Interactive Route Map Container matching 103.png
+                    // Interactive Route Map Container
                     Container(
-                      height: 280,
+                      height: 220,
                       width: double.infinity,
                       decoration: BoxDecoration(
                         color: const Color(0xFFE8DEF8),
@@ -145,17 +145,66 @@ class DriverRideStartBoardingScreen extends StatelessWidget {
               ),
             ),
 
-            // Bottom Start Navigations CTA matching 103.png
+            // Bottom 4 Action Buttons
             Padding(
               padding: const EdgeInsets.all(20.0),
-              child: CustomButton(
-                text: 'Start Navigations',
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const DriverOnTripProgressScreen()),
-                  );
-                },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 1. Share Trip Card
+                  CustomButton(
+                    text: 'Share Trip Card',
+                    isOutlined: true,
+                    backgroundColor: const Color(0xFFF3EDF7),
+                    textColor: AppColors.primary,
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Trip card shared successfully!')),
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // 2. Start Ride
+                  CustomButton(
+                    text: 'Start Ride',
+                    backgroundColor: AppColors.primary,
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Ride started!')),
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // 3. Start Navigation
+                  CustomButton(
+                    text: 'Start Navigation',
+                    backgroundColor: const Color(0xFF4CAF50),
+                    textColor: Colors.white,
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const DriverOnTripProgressScreen()),
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // 4. Complete Ride
+                  CustomButton(
+                    text: 'Complete Ride',
+                    isOutlined: true,
+                    backgroundColor: Colors.white,
+                    textColor: AppColors.primary,
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                  ),
+                ],
               ),
             ),
           ],

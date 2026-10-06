@@ -31,6 +31,39 @@
 
   <title>app_login</title>
   <link rel="manifest" href="manifest.json">
+  <!-- Razorpay Web Checkout JS -->
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script>
+    window.openRazorpayWebCheckout = function(optionsJson, successCallback, errorCallback) {
+      try {
+        var options = typeof optionsJson === 'string' ? JSON.parse(optionsJson) : optionsJson;
+        options.handler = function(response) {
+          if (successCallback) {
+            successCallback(response.razorpay_payment_id || '', response.razorpay_order_id || '', response.razorpay_signature || '');
+          }
+        };
+        options.modal = {
+          ondismiss: function() {
+            if (errorCallback) {
+              errorCallback("Payment cancelled or modal closed");
+            }
+          }
+        };
+        var rzp = new Razorpay(options);
+        rzp.on('payment.failed', function(response) {
+          if (errorCallback) {
+            var msg = (response && response.error && response.error.description) ? response.error.description : "Payment failed";
+            errorCallback(msg);
+          }
+        });
+        rzp.open();
+      } catch (err) {
+        if (errorCallback) {
+          errorCallback("Failed to launch Razorpay Web: " + err);
+        }
+      }
+    };
+  </script>
 </head>
 <body>
   <!--
