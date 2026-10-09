@@ -105,10 +105,20 @@ class _HostAddPropertyStep4CommonScreenState extends State<HostAddPropertyStep4C
       );
     } else {
       // Hotel (Default)
+      final propertyData = {
+        'selectedCategory': widget.selectedCategory,
+        'propertyName': widget.propertyName,
+        'propertyDetails': widget.propertyDetails,
+        'addressMap': widget.addressMap,
+        'formattedAddress': widget.formattedAddress,
+        'description': desc,
+      };
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => const HostAddPropertyStep5Screen(),
+          builder: (context) => HostAddPropertyStep5Screen(
+            propertyData: propertyData,
+          ),
         ),
       );
     }

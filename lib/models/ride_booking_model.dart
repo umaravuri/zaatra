@@ -1,3 +1,99 @@
+class RidePreferences {
+  final bool autoApproval;
+  final bool wifi;
+  final bool usbCharging;
+  final int luggageCount;
+  final int mediumBagCount;
+  final List<String> driverPreferences;
+  final List<String> customerPreferences;
+  final List<String> rideFeatures;
+
+  const RidePreferences({
+    this.autoApproval = false,
+    this.wifi = false,
+    this.usbCharging = false,
+    this.luggageCount = 1,
+    this.mediumBagCount = 1,
+    this.driverPreferences = const [],
+    this.customerPreferences = const [],
+    this.rideFeatures = const [],
+  });
+
+  factory RidePreferences.fromJson(dynamic json, {dynamic rootJson}) {
+    if (json == null && rootJson is! Map<String, dynamic>) {
+      return const RidePreferences();
+    }
+    final p = json is Map<String, dynamic> ? json : (json is Map ? Map<String, dynamic>.from(json) : <String, dynamic>{});
+    final root = rootJson is Map<String, dynamic> ? rootJson : (rootJson is Map ? Map<String, dynamic>.from(rootJson) : <String, dynamic>{});
+
+    final auto = p['autoApproval'] == true || root['autoApproval'] == true;
+    final wifi = p['wifi'] == true || root['wifi'] == true;
+    final usb = p['usbCharging'] == true || root['usbCharging'] == true;
+    final luggage = (p['luggageCount'] is num)
+        ? (p['luggageCount'] as num).toInt()
+        : (int.tryParse(p['luggageCount']?.toString() ?? '') ??
+            (root['maxLuggagePerPassenger'] is num ? (root['maxLuggagePerPassenger'] as num).toInt() : 1));
+    final mediumBag = (p['mediumBagCount'] is num)
+        ? (p['mediumBagCount'] as num).toInt()
+        : (int.tryParse(p['mediumBagCount']?.toString() ?? '') ?? 1);
+
+    final dPrefs = <String>[];
+    if (p['driverPreferences'] is List) {
+      dPrefs.addAll((p['driverPreferences'] as List).map((e) => e.toString()));
+    }
+    if (root['customPreferences'] is List) {
+      for (final cp in root['customPreferences']) {
+        final str = cp.toString();
+        if (!dPrefs.contains(str)) dPrefs.add(str);
+      }
+    }
+
+    final cPrefs = <String>[];
+    if (p['customerPreferences'] is List) {
+      cPrefs.addAll((p['customerPreferences'] as List).map((e) => e.toString()));
+    }
+
+    final features = <String>[];
+    if (wifi && !features.contains('Free WiFi')) features.add('Free WiFi');
+    if (usb && !features.contains('USB Charging')) features.add('USB Charging');
+    if (p['rideFeatures'] is List) {
+      for (final f in p['rideFeatures'] as List) {
+        final str = f.toString();
+        if (!features.contains(str)) features.add(str);
+      }
+    }
+    if (p['customFeatures'] is List) {
+      for (final cf in p['customFeatures'] as List) {
+        final str = cf.toString();
+        if (!features.contains(str)) features.add(str);
+      }
+    }
+    if (root['customFeatures'] is List) {
+      for (final cf in root['customFeatures'] as List) {
+        final str = cf.toString();
+        if (!features.contains(str)) features.add(str);
+      }
+    }
+    if (root['amenities'] is List) {
+      for (final am in root['amenities'] as List) {
+        final str = am.toString();
+        if (!features.contains(str)) features.add(str);
+      }
+    }
+
+    return RidePreferences(
+      autoApproval: auto,
+      wifi: wifi,
+      usbCharging: usb,
+      luggageCount: luggage > 0 ? luggage : 1,
+      mediumBagCount: mediumBag > 0 ? mediumBag : 1,
+      driverPreferences: dPrefs,
+      customerPreferences: cPrefs,
+      rideFeatures: features,
+    );
+  }
+}
+
 class RideDriver {
   final String id;
   final String name;
@@ -19,6 +115,7 @@ class RideDriver {
   final String tripsText;
   final String driverSummary;
   final bool isOnline;
+  final RidePreferences preferences;
 
   const RideDriver({
     this.id = '',
@@ -41,6 +138,7 @@ class RideDriver {
     this.tripsText = '',
     this.driverSummary = '',
     this.isOnline = true,
+    this.preferences = const RidePreferences(),
   });
 
   factory RideDriver.fromJson(Map<String, dynamic> json, {String? defaultCar, String? defaultPlate, double? defaultPrice}) {
@@ -89,6 +187,8 @@ class RideDriver {
     final rawSeats = json['seatsAvailable'] ?? json['availableSeats'] ?? (json['seats'] is Map ? json['seats']['available'] : null) ?? json['totalSeats'] ?? 0;
     final seats = rawSeats is num ? rawSeats.toInt() : (int.tryParse(rawSeats.toString()) ?? 0);
 
+    final prefsObj = RidePreferences.fromJson(json['preferences'] ?? driverMap?['preferences'], rootJson: json);
+
     return RideDriver(
       id: json['id']?.toString() ?? json['driverId']?.toString() ?? json['rideId']?.toString() ?? driverMap?['id']?.toString() ?? '',
       name: name,
@@ -105,11 +205,12 @@ class RideDriver {
       departureTime: json['departureTime']?.toString() ?? tripMap?['departureTime']?.toString() ?? '',
       pickupPoint: json['pickupPoint']?.toString() ?? json['pickupLocation']?.toString() ?? tripMap?['pickupLocation']?.toString() ?? '',
       destinationPoint: json['destinationPoint']?.toString() ?? json['destinationLocation']?.toString() ?? tripMap?['destinationLocation']?.toString() ?? '',
-      amenities: json['amenities'] is List ? List<String>.from(json['amenities'].map((e) => e.toString())) : const [],
+      amenities: json['amenities'] is List ? List<String>.from(json['amenities'].map((e) => e.toString())) : prefsObj.rideFeatures,
       avatarImage: avatar,
       phone: json['phone']?.toString() ?? driverMap?['phone']?.toString() ?? '',
       about: json['about']?.toString() ?? driverMap?['about']?.toString() ?? '',
       isOnline: json['isOnline'] != false && driverMap?['isOnline'] != false,
+      preferences: prefsObj,
     );
   }
 
@@ -134,6 +235,7 @@ class RideDriver {
     String? tripsText,
     String? driverSummary,
     bool? isOnline,
+    RidePreferences? preferences,
   }) {
     return RideDriver(
       id: id ?? this.id,
@@ -156,6 +258,7 @@ class RideDriver {
       tripsText: tripsText ?? this.tripsText,
       driverSummary: driverSummary ?? this.driverSummary,
       isOnline: isOnline ?? this.isOnline,
+      preferences: preferences ?? this.preferences,
     );
   }
 }
@@ -308,6 +411,7 @@ class RideDetailData {
   final bool canContactDriver;
   final bool canShareRide;
   final bool canBook;
+  final RidePreferences preferences;
 
   const RideDetailData({
     required this.rideId,
@@ -338,6 +442,7 @@ class RideDetailData {
     this.canContactDriver = true,
     this.canShareRide = true,
     this.canBook = true,
+    this.preferences = const RidePreferences(),
   });
 
   factory RideDetailData.fromJson(
@@ -509,6 +614,7 @@ class RideDetailData {
       canContactDriver: actions['canContactDriver'] != false,
       canShareRide: actions['canShareRide'] != false,
       canBook: actions['canBook'] != false,
+      preferences: driver.preferences,
     );
   }
 }
@@ -931,6 +1037,448 @@ class PreTripAlertResponse {
       preTripAlertSentAt: json['preTripAlertSentAt']?.toString() ?? '',
       driverNotified: notifs['driver'] == true,
       passengersCount: getNum(notifs['passengersCount']).toInt(),
+    );
+  }
+}
+
+class RideConfirmationModal {
+  final String title;
+  final String subtitle;
+  final String status;
+  final String boardingPin;
+  final String pinLabel;
+  final String carAndPlate;
+  final String carAndPlateLabel;
+  final String payToDriver;
+  final String payToDriverLabel;
+  final double amount;
+  final String amountFormatted;
+  final String paymentMethod;
+  final String driverName;
+  final String driverPhone;
+  final String vehicle;
+  final String vehicleNumberPlate;
+  final String viewTripDetailsAction;
+  final String showRouteMapAction;
+  final String goToDashboardAction;
+
+  const RideConfirmationModal({
+    this.title = 'Ride Accepted & Confirmed!',
+    this.subtitle = '',
+    this.status = 'confirmed',
+    this.boardingPin = '',
+    this.pinLabel = 'Boarding 4-Digit PIN:',
+    this.carAndPlate = '',
+    this.carAndPlateLabel = 'Car & Plate:',
+    this.payToDriver = '',
+    this.payToDriverLabel = 'Pay to Driver:',
+    this.amount = 0.0,
+    this.amountFormatted = '',
+    this.paymentMethod = 'Cash/UPI',
+    this.driverName = '',
+    this.driverPhone = '',
+    this.vehicle = '',
+    this.vehicleNumberPlate = '',
+    this.viewTripDetailsAction = '',
+    this.showRouteMapAction = '',
+    this.goToDashboardAction = '',
+  });
+
+  factory RideConfirmationModal.fromJson(Map<String, dynamic> json) {
+    final modal = json['confirmationModal'] is Map<String, dynamic>
+        ? json['confirmationModal'] as Map<String, dynamic>
+        : (json['data'] is Map<String, dynamic>
+            ? (json['data']['confirmationModal'] is Map<String, dynamic>
+                ? json['data']['confirmationModal'] as Map<String, dynamic>
+                : json['data'] as Map<String, dynamic>)
+            : json);
+
+    final actions = modal['actions'] is Map<String, dynamic>
+        ? modal['actions'] as Map<String, dynamic>
+        : <String, dynamic>{};
+
+    final rawAmt = modal['amount'] ?? modal['totalAmount'] ?? 0;
+    final amt = (rawAmt is num) ? rawAmt.toDouble() : (double.tryParse(rawAmt.toString()) ?? 0.0);
+
+    return RideConfirmationModal(
+      title: modal['title']?.toString() ?? 'Ride Accepted & Confirmed!',
+      subtitle: modal['subtitle']?.toString() ?? '',
+      status: modal['status']?.toString() ?? 'confirmed',
+      boardingPin: modal['boardingPin']?.toString() ?? modal['pin']?.toString() ?? '',
+      pinLabel: modal['pinLabel']?.toString() ?? 'Boarding 4-Digit PIN:',
+      carAndPlate: modal['carAndPlate']?.toString() ?? '',
+      carAndPlateLabel: modal['carAndPlateLabel']?.toString() ?? 'Car & Plate:',
+      payToDriver: modal['payToDriver']?.toString() ?? (amt > 0 ? '₹${amt.toInt()} (Cash/UPI)' : ''),
+      payToDriverLabel: modal['payToDriverLabel']?.toString() ?? 'Pay to Driver:',
+      amount: amt,
+      amountFormatted: modal['amountFormatted']?.toString() ?? (amt > 0 ? '₹${amt.toInt()}' : ''),
+      paymentMethod: modal['paymentMethod']?.toString() ?? 'Cash/UPI',
+      driverName: modal['driverName']?.toString() ?? '',
+      driverPhone: modal['driverPhone']?.toString() ?? '',
+      vehicle: modal['vehicle']?.toString() ?? '',
+      vehicleNumberPlate: modal['vehicleNumberPlate']?.toString() ?? '',
+      viewTripDetailsAction: actions['viewTripDetails']?.toString() ?? '',
+      showRouteMapAction: actions['showRouteMap']?.toString() ?? '',
+      goToDashboardAction: actions['goToDashboard']?.toString() ?? '',
+    );
+  }
+}
+
+class TripPassStop {
+  final String time;
+  final String location;
+  final String type;
+  final bool isStart;
+  final bool isEnd;
+  final String icon;
+  final double? lat;
+  final double? lng;
+
+  const TripPassStop({
+    this.time = '',
+    this.location = '',
+    this.type = 'stop',
+    this.isStart = false,
+    this.isEnd = false,
+    this.icon = 'circle',
+    this.lat,
+    this.lng,
+  });
+
+  factory TripPassStop.fromJson(Map<String, dynamic> json) {
+    num? getNum(dynamic v) => (v is num) ? v : num.tryParse(v?.toString() ?? '');
+    return TripPassStop(
+      time: json['time']?.toString() ?? '',
+      location: json['location']?.toString() ?? json['title']?.toString() ?? '',
+      type: json['type']?.toString() ?? '',
+      isStart: json['isStart'] == true,
+      isEnd: json['isEnd'] == true,
+      icon: json['icon']?.toString() ?? 'circle',
+      lat: getNum(json['lat'])?.toDouble(),
+      lng: getNum(json['lng'])?.toDouble(),
+    );
+  }
+}
+
+class TripPassTicket {
+  final String checkInLabel;
+  final String checkInDate;
+  final String checkInTime;
+  final String checkOutLabel;
+  final String checkOutDate;
+  final String checkOutTime;
+  final String seatConfirmedLabel;
+  final String seatConfirmedValue;
+  final int seatsCount;
+
+  const TripPassTicket({
+    this.checkInLabel = 'Check - in',
+    this.checkInDate = '',
+    this.checkInTime = '',
+    this.checkOutLabel = 'Check - Out',
+    this.checkOutDate = '',
+    this.checkOutTime = '',
+    this.seatConfirmedLabel = 'Seat Conformed',
+    this.seatConfirmedValue = 'A 1',
+    this.seatsCount = 1,
+  });
+
+  factory TripPassTicket.fromJson(Map<String, dynamic> json) {
+    final checkIn = json['checkIn'] is Map ? json['checkIn'] as Map : {};
+    final checkOut = json['checkOut'] is Map ? json['checkOut'] as Map : {};
+    final seat = json['seatConfirmed'] is Map ? json['seatConfirmed'] as Map : {};
+
+    num? getNum(dynamic v) => (v is num) ? v : num.tryParse(v?.toString() ?? '');
+
+    return TripPassTicket(
+      checkInLabel: checkIn['label']?.toString() ?? 'Check - in',
+      checkInDate: checkIn['date']?.toString() ?? '',
+      checkInTime: checkIn['time']?.toString() ?? '',
+      checkOutLabel: checkOut['label']?.toString() ?? 'Check - Out',
+      checkOutDate: checkOut['date']?.toString() ?? '',
+      checkOutTime: checkOut['time']?.toString() ?? '',
+      seatConfirmedLabel: seat['label']?.toString() ?? 'Seat Conformed',
+      seatConfirmedValue: seat['value']?.toString() ?? seat['seatNumber']?.toString() ?? 'A 1',
+      seatsCount: getNum(seat['seatsCount'])?.toInt() ?? 1,
+    );
+  }
+}
+
+class TripPassMapPreview {
+  final String pickupLocation;
+  final String destinationLocation;
+  final double pickupLat;
+  final double pickupLng;
+  final double destLat;
+  final double destLng;
+  final double vehicleLiveLat;
+  final double vehicleLiveLng;
+  final String routePolyline;
+  final List<Map<String, dynamic>> intermediateStops;
+
+  const TripPassMapPreview({
+    this.pickupLocation = '',
+    this.destinationLocation = '',
+    this.pickupLat = 0.0,
+    this.pickupLng = 0.0,
+    this.destLat = 0.0,
+    this.destLng = 0.0,
+    this.vehicleLiveLat = 0.0,
+    this.vehicleLiveLng = 0.0,
+    this.routePolyline = '',
+    this.intermediateStops = const [],
+  });
+
+  factory TripPassMapPreview.fromJson(Map<String, dynamic> json) {
+    num? getNum(dynamic v) => (v is num) ? v : num.tryParse(v?.toString() ?? '');
+    final pCoords = json['pickupCoordinates'] is Map ? json['pickupCoordinates'] as Map : {};
+    final dCoords = json['destinationCoordinates'] is Map ? json['destinationCoordinates'] as Map : {};
+    final vCoords = json['vehicleLiveLocation'] is Map ? json['vehicleLiveLocation'] as Map : {};
+
+    final stopsList = <Map<String, dynamic>>[];
+    if (json['intermediateStops'] is List) {
+      for (final item in json['intermediateStops'] as List) {
+        if (item is Map) stopsList.add(Map<String, dynamic>.from(item));
+      }
+    }
+
+    return TripPassMapPreview(
+      pickupLocation: json['pickupLocation']?.toString() ?? '',
+      destinationLocation: json['destinationLocation']?.toString() ?? '',
+      pickupLat: getNum(pCoords['lat'])?.toDouble() ?? 0.0,
+      pickupLng: getNum(pCoords['lng'])?.toDouble() ?? 0.0,
+      destLat: getNum(dCoords['lat'])?.toDouble() ?? 0.0,
+      destLng: getNum(dCoords['lng'])?.toDouble() ?? 0.0,
+      vehicleLiveLat: getNum(vCoords['lat'])?.toDouble() ?? 0.0,
+      vehicleLiveLng: getNum(vCoords['lng'])?.toDouble() ?? 0.0,
+      routePolyline: json['routePolyline']?.toString() ?? '',
+      intermediateStops: stopsList,
+    );
+  }
+}
+
+class TripPassDetails {
+  final String headerDateTime;
+  final TripPassTicket ticket;
+  final String boardingPin;
+  final String qrPassToken;
+  final String driverName;
+  final String driverPhone;
+  final String driverAvatar;
+  final String vehicleSummary;
+  final double driverRating;
+  final int driverCompletedTrips;
+  final String callAction;
+  final String messageAction;
+  final List<TripPassStop> routeStops;
+  final String coTravelersNote;
+  final String fuelShareNote;
+  final String fuelSharePriceFormatted;
+  final String bookingId;
+  final String bookingBy;
+  final String customerPhone;
+  final String bookingRequestDate;
+  final String rideAcceptDate;
+  final String rideAcceptedDate;
+  final String amountFormatted;
+  final String paymentStatus;
+  final String paymentMethod;
+  final TripPassMapPreview mapPreview;
+  final String cancellationPolicyTitle;
+  final String cancellationPolicyDescription;
+  final String cancelBookingEndpoint;
+  final bool canCancelBooking;
+  final String shareTicketUrl;
+
+  const TripPassDetails({
+    this.headerDateTime = '',
+    this.ticket = const TripPassTicket(),
+    this.boardingPin = '',
+    this.qrPassToken = '',
+    this.driverName = 'Driver',
+    this.driverPhone = '',
+    this.driverAvatar = '',
+    this.vehicleSummary = '',
+    this.driverRating = 4.9,
+    this.driverCompletedTrips = 0,
+    this.callAction = '',
+    this.messageAction = '',
+    this.routeStops = const [],
+    this.coTravelersNote = '',
+    this.fuelShareNote = '',
+    this.fuelSharePriceFormatted = '',
+    this.bookingId = '',
+    this.bookingBy = '',
+    this.customerPhone = '',
+    this.bookingRequestDate = '',
+    this.rideAcceptDate = '',
+    this.rideAcceptedDate = '',
+    this.amountFormatted = '',
+    this.paymentStatus = 'paid',
+    this.paymentMethod = 'Cash/UPI',
+    this.mapPreview = const TripPassMapPreview(),
+    this.cancellationPolicyTitle = 'Cancellation policy',
+    this.cancellationPolicyDescription = '',
+    this.cancelBookingEndpoint = '',
+    this.canCancelBooking = true,
+    this.shareTicketUrl = '',
+  });
+
+  factory TripPassDetails.fromJson(Map<String, dynamic> json) {
+    final trip = json['tripDetails'] is Map<String, dynamic>
+        ? json['tripDetails'] as Map<String, dynamic>
+        : (json['data'] is Map<String, dynamic>
+            ? (json['data']['tripDetails'] is Map<String, dynamic>
+                ? json['data']['tripDetails'] as Map<String, dynamic>
+                : json['data'] as Map<String, dynamic>)
+            : json);
+
+    final ticketJson = trip['ticket'] is Map<String, dynamic> ? trip['ticket'] as Map<String, dynamic> : <String, dynamic>{};
+    final dProfile = trip['driverProfile'] is Map<String, dynamic> ? trip['driverProfile'] as Map<String, dynamic> : <String, dynamic>{};
+    final dActions = dProfile['actions'] is Map ? dProfile['actions'] as Map : {};
+    final callObj = dActions['call'] is Map ? dActions['call'] as Map : {};
+    final msgObj = dActions['message'] is Map ? dActions['message'] as Map : {};
+
+    final rTimeline = trip['routeTimeline'] is Map<String, dynamic> ? trip['routeTimeline'] as Map<String, dynamic> : <String, dynamic>{};
+    final stopsList = <TripPassStop>[];
+    if (rTimeline['stops'] is List) {
+      for (final s in rTimeline['stops'] as List) {
+        if (s is Map) stopsList.add(TripPassStop.fromJson(Map<String, dynamic>.from(s)));
+      }
+    }
+
+    final bDetails = trip['bookingDetails'] is Map<String, dynamic> ? trip['bookingDetails'] as Map<String, dynamic> : <String, dynamic>{};
+    final mapJson = trip['mapPreview'] is Map<String, dynamic> ? trip['mapPreview'] as Map<String, dynamic> : <String, dynamic>{};
+    final cPolicy = trip['cancellationPolicy'] is Map<String, dynamic> ? trip['cancellationPolicy'] as Map<String, dynamic> : <String, dynamic>{};
+    final actions = trip['actions'] is Map<String, dynamic> ? trip['actions'] as Map<String, dynamic> : <String, dynamic>{};
+    final cancelObj = actions['cancelBooking'] is Map ? actions['cancelBooking'] as Map : {};
+
+    num? getNum(dynamic v) => (v is num) ? v : num.tryParse(v?.toString() ?? '');
+
+    return TripPassDetails(
+      headerDateTime: trip['headerDateTime']?.toString() ?? '',
+      ticket: TripPassTicket.fromJson(ticketJson),
+      boardingPin: trip['boardingPin']?.toString() ?? (trip['boardingPinBanner'] is Map ? trip['boardingPinBanner']['pin']?.toString() ?? '' : ''),
+      qrPassToken: trip['qrPassToken']?.toString() ?? '',
+      driverName: dProfile['driverName']?.toString() ?? dProfile['name']?.toString() ?? 'Driver',
+      driverPhone: dProfile['driverPhone']?.toString() ?? dProfile['phone']?.toString() ?? '',
+      driverAvatar: dProfile['driverAvatar']?.toString() ?? dProfile['avatar']?.toString() ?? '',
+      vehicleSummary: dProfile['subtitle']?.toString() ?? (dProfile['vehicle'] != null ? '${dProfile['vehicle']} • ${dProfile['vehicleNumberPlate'] ?? ""}' : ''),
+      driverRating: getNum(dProfile['rating'])?.toDouble() ?? 4.9,
+      driverCompletedTrips: getNum(dProfile['completedTrips'])?.toInt() ?? 0,
+      callAction: callObj['action']?.toString() ?? '',
+      messageAction: msgObj['action']?.toString() ?? '',
+      routeStops: stopsList,
+      coTravelersNote: rTimeline['coTravelersNote']?.toString() ?? '',
+      fuelShareNote: rTimeline['fuelShareNote']?.toString() ?? '',
+      fuelSharePriceFormatted: rTimeline['totalFuelShareAmountFormatted']?.toString() ?? rTimeline['fuelSharePriceFormatted']?.toString() ?? '',
+      bookingId: bDetails['bookingId']?.toString() ?? '',
+      bookingBy: bDetails['bookingByText']?.toString() ?? (bDetails['bookingBy'] != null ? 'Booking by ${bDetails['bookingBy']}' : ''),
+      customerPhone: bDetails['customerPhone']?.toString() ?? '',
+      bookingRequestDate: bDetails['bookingRequest']?.toString() ?? '',
+      rideAcceptDate: bDetails['rideAccept']?.toString() ?? '',
+      rideAcceptedDate: bDetails['rideAccepted']?.toString() ?? '',
+      amountFormatted: bDetails['amountFormatted']?.toString() ?? '',
+      paymentStatus: bDetails['paymentStatus']?.toString() ?? 'paid',
+      paymentMethod: bDetails['paymentMethod']?.toString() ?? 'Cash/UPI',
+      mapPreview: TripPassMapPreview.fromJson(mapJson),
+      cancellationPolicyTitle: cPolicy['title']?.toString() ?? 'Cancellation policy',
+      cancellationPolicyDescription: cPolicy['description']?.toString() ?? '',
+      cancelBookingEndpoint: cancelObj['endpoint']?.toString() ?? '',
+      canCancelBooking: actions['canCancelBooking'] != false,
+      shareTicketUrl: actions['shareTicketUrl']?.toString() ?? '',
+    );
+  }
+}
+
+class RoutePropertyItem {
+  final String propertyId;
+  final String title;
+  final String type;
+  final String city;
+  final String location;
+  final String address;
+  final double price;
+  final double pricePerHour;
+  final String priceFormatted;
+  final String pricePerHourFormatted;
+  final double rating;
+  final int reviewsCount;
+  final String image;
+  final double lat;
+  final double lng;
+  final double distanceFromRouteKm;
+  final double distanceKm;
+  final String distanceFormatted;
+  final bool isNearby;
+  final List<String> amenities;
+  final String bookUrl;
+  final String icon;
+
+  const RoutePropertyItem({
+    this.propertyId = '',
+    this.title = '',
+    this.type = 'Hotel',
+    this.city = '',
+    this.location = '',
+    this.address = '',
+    this.price = 0.0,
+    this.pricePerHour = 0.0,
+    this.priceFormatted = '',
+    this.pricePerHourFormatted = '',
+    this.rating = 4.8,
+    this.reviewsCount = 0,
+    this.image = '',
+    this.lat = 0.0,
+    this.lng = 0.0,
+    this.distanceFromRouteKm = 0.0,
+    this.distanceKm = 0.0,
+    this.distanceFormatted = '',
+    this.isNearby = false,
+    this.amenities = const [],
+    this.bookUrl = '',
+    this.icon = 'resort_pin',
+  });
+
+  factory RoutePropertyItem.fromJson(Map<String, dynamic> json) {
+    num? getNum(dynamic v) => (v is num) ? v : num.tryParse(v?.toString() ?? '');
+    final coords = json['coordinates'] is Map ? json['coordinates'] as Map : {};
+
+    final amenitiesList = <String>[];
+    if (json['amenities'] is List) {
+      for (final item in json['amenities'] as List) {
+        amenitiesList.add(item.toString());
+      }
+    }
+
+    final priceVal = getNum(json['price'] ?? json['pricePerNight'])?.toDouble() ?? 0.0;
+    final priceHr = getNum(json['pricePerHour'])?.toDouble() ?? 0.0;
+    final distRoute = getNum(json['distanceFromRouteKm'])?.toDouble() ?? 0.0;
+    final distLive = getNum(json['distanceKm'])?.toDouble() ?? 0.0;
+
+    return RoutePropertyItem(
+      propertyId: json['propertyId']?.toString() ?? json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? json['name']?.toString() ?? '',
+      type: json['type']?.toString() ?? 'Hotel',
+      city: json['city']?.toString() ?? '',
+      location: json['location']?.toString() ?? '',
+      address: json['address']?.toString() ?? json['location']?.toString() ?? '',
+      price: priceVal,
+      pricePerHour: priceHr,
+      priceFormatted: json['priceFormatted']?.toString() ?? (priceVal > 0 ? '₹${priceVal.toInt()}/night' : ''),
+      pricePerHourFormatted: json['pricePerHourFormatted']?.toString() ?? (priceHr > 0 ? '₹${priceHr.toInt()}/hr' : ''),
+      rating: getNum(json['rating'])?.toDouble() ?? 4.8,
+      reviewsCount: getNum(json['reviewsCount'] ?? json['reviews'])?.toInt() ?? 0,
+      image: json['image']?.toString() ?? '',
+      lat: getNum(coords['lat'] ?? json['latitude'])?.toDouble() ?? 0.0,
+      lng: getNum(coords['lng'] ?? json['longitude'])?.toDouble() ?? 0.0,
+      distanceFromRouteKm: distRoute,
+      distanceKm: distLive > 0 ? distLive : distRoute,
+      distanceFormatted: json['distanceFormatted']?.toString() ?? (distLive > 0 ? '$distLive km away' : (distRoute > 0 ? '$distRoute km off route' : '')),
+      isNearby: json['isNearby'] == true || distLive <= 15,
+      amenities: amenitiesList,
+      bookUrl: json['bookUrl']?.toString() ?? '',
+      icon: json['icon']?.toString() ?? 'resort_pin',
     );
   }
 }

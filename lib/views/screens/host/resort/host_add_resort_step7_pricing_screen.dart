@@ -15,7 +15,7 @@ class HostAddResortStep7PricingScreen extends StatefulWidget {
   final List<String> houseRules;
 
   const HostAddResortStep7PricingScreen({
-    Key? key,
+    super.key,
     required this.selectedCategory,
     required this.propertyName,
     required this.propertyDetails,
@@ -24,7 +24,7 @@ class HostAddResortStep7PricingScreen extends StatefulWidget {
     required this.description,
     required this.amenities,
     required this.houseRules,
-  }) : super(key: key);
+  });
 
   @override
   State<HostAddResortStep7PricingScreen> createState() => _HostAddResortStep7PricingScreenState();
@@ -32,10 +32,37 @@ class HostAddResortStep7PricingScreen extends StatefulWidget {
 
 class _HostAddResortStep7PricingScreenState extends State<HostAddResortStep7PricingScreen> {
   final TextEditingController _cottageRateController = TextEditingController();
+  final TextEditingController _luxurySuiteRateController = TextEditingController();
   final TextEditingController _dayPassController = TextEditingController();
   final TextEditingController _extraGuestController = TextEditingController();
   final TextEditingController _spaActivityController = TextEditingController();
-  String _selectedCurrency = 'INR - Indian Rupee (₹)';
+  final String _selectedCurrency = 'INR - Indian Rupee (₹)';
+
+  int get _cottagesCount => int.tryParse(widget.propertyDetails['cottages']?.toString() ?? '0') ?? 0;
+  int get _luxurySuitesCount => int.tryParse(widget.propertyDetails['luxurySuites']?.toString() ?? '0') ?? 0;
+  int get _guestsPerCottage => int.tryParse(widget.propertyDetails['guestsPerCottage']?.toString() ?? '4') ?? 4;
+  int get _guestsPerSuite => int.tryParse(widget.propertyDetails['guestsPerSuite']?.toString() ?? '2') ?? 2;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_cottagesCount > 0) {
+      _cottageRateController.text = '12000';
+    }
+    if (_luxurySuitesCount > 0) {
+      _luxurySuiteRateController.text = '18000';
+    }
+  }
+
+  @override
+  void dispose() {
+    _cottageRateController.dispose();
+    _luxurySuiteRateController.dispose();
+    _dayPassController.dispose();
+    _extraGuestController.dispose();
+    _spaActivityController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,11 +73,11 @@ class _HostAddResortStep7PricingScreenState extends State<HostAddResortStep7Pric
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Column(
-          children: const [
+        title: const Column(
+          children: [
             Text('Add new property', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 16)),
             SizedBox(height: 2),
-            Text('Set 7 by 9 (Resort Pricing)', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+            Text('Step 7 of 9 (Resort Pricing)', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
           ],
         ),
         centerTitle: true,
@@ -85,18 +112,44 @@ class _HostAddResortStep7PricingScreenState extends State<HostAddResortStep7Pric
                       children: [
                         const Text('Resort Package & Tariff', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                         const SizedBox(height: 4),
-                        const Text('Set all-inclusive cottage stay rates, buffet pass & activity charges', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                        const Text('Set nightly stay rates for cottages & luxury suites, day pass & activities', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                         const SizedBox(height: 22),
 
-                        // Cottage Rate per Night
-                        CustomTextField(
-                          label: 'All-Inclusive Cottage Rate / Night',
-                          hint: 'e.g. ₹ 18000',
-                          controller: _cottageRateController,
-                        ),
-                        const SizedBox(height: 18),
+                        // 1. Cottage Pricing Field
+                        if (_cottagesCount > 0) ...[
+                          _buildInventoryPriceCard(
+                            title: 'Standard Cottage Rate / Night',
+                            subtitle: '$_cottagesCount Cottage(s) configured • Max $_guestsPerCottage Guests each',
+                            icon: Icons.cabin_rounded,
+                            controller: _cottageRateController,
+                            hint: 'e.g. ₹ 12,000',
+                          ),
+                          const SizedBox(height: 18),
+                        ],
 
-                        // Day Pass / Buffet Inclusion
+                        // 2. Luxury Suite Pricing Field
+                        if (_luxurySuitesCount > 0) ...[
+                          _buildInventoryPriceCard(
+                            title: 'Luxury Suite Rate / Night',
+                            subtitle: '$_luxurySuitesCount Suite(s) configured • Max $_guestsPerSuite Guests each',
+                            icon: Icons.villa_rounded,
+                            controller: _luxurySuiteRateController,
+                            hint: 'e.g. ₹ 18,000',
+                          ),
+                          const SizedBox(height: 18),
+                        ],
+
+                        // If neither was explicitly > 0, fallback to general stay rate
+                        if (_cottagesCount == 0 && _luxurySuitesCount == 0) ...[
+                          CustomTextField(
+                            label: 'All-Inclusive Stay Rate / Night',
+                            hint: 'e.g. ₹ 15,000',
+                            controller: _cottageRateController,
+                          ),
+                          const SizedBox(height: 18),
+                        ],
+
+                        // 3. Day Pass / Buffet Inclusion
                         CustomTextField(
                           label: 'Day Pass / Buffet Inclusion Rate (Per Person)',
                           hint: 'e.g. ₹ 2500',
@@ -104,12 +157,12 @@ class _HostAddResortStep7PricingScreenState extends State<HostAddResortStep7Pric
                         ),
                         const SizedBox(height: 18),
 
-                        // Extra Guest & Spa Surcharge Row
+                        // 4. Extra Guest & Spa Surcharge Row
                         Row(
                           children: [
                             Expanded(
                               child: CustomTextField(
-                                label: 'Extra Adult / Child Tariff',
+                                label: 'Extra Adult/Child Tariff',
                                 hint: 'e.g. ₹ 1500',
                                 controller: _extraGuestController,
                               ),
@@ -117,7 +170,7 @@ class _HostAddResortStep7PricingScreenState extends State<HostAddResortStep7Pric
                             const SizedBox(width: 12),
                             Expanded(
                               child: CustomTextField(
-                                label: 'Spa & Adventure Pass',
+                                label: 'Spa & Activity Pass',
                                 hint: 'e.g. ₹ 3000',
                                 controller: _spaActivityController,
                               ),
@@ -168,8 +221,10 @@ class _HostAddResortStep7PricingScreenState extends State<HostAddResortStep7Pric
                         child: CustomButton(
                           text: 'Next',
                           onPressed: () {
-                            final rawRate = double.tryParse(_cottageRateController.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
-                            if (rawRate <= 0) {
+                            final cottageRate = double.tryParse(_cottageRateController.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
+                            final suiteRate = double.tryParse(_luxurySuiteRateController.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
+
+                            if (_cottagesCount > 0 && cottageRate <= 0) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('Please enter a valid cottage rate per night.'),
@@ -178,9 +233,24 @@ class _HostAddResortStep7PricingScreenState extends State<HostAddResortStep7Pric
                               );
                               return;
                             }
+
+                            if (_luxurySuitesCount > 0 && suiteRate <= 0) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please enter a valid luxury suite rate per night.'),
+                                  backgroundColor: Colors.redAccent,
+                                ),
+                              );
+                              return;
+                            }
+
+                            final primaryBaseRate = cottageRate > 0 ? cottageRate : (suiteRate > 0 ? suiteRate : 12000.0);
+
                             final pricingData = {
-                              'basePricePerNight': rawRate,
-                              'allInclusiveCottageRate': rawRate,
+                              'basePricePerNight': primaryBaseRate,
+                              'allInclusiveCottageRate': cottageRate,
+                              'cottageRatePerNight': cottageRate,
+                              'luxurySuiteRatePerNight': suiteRate,
                               'dayPassRate': double.tryParse(_dayPassController.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 2500.0,
                               'additionalCharges': {
                                 'guestPricePerExtraGuestPerNight': double.tryParse(_extraGuestController.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 1500.0,
@@ -215,6 +285,49 @@ class _HostAddResortStep7PricingScreenState extends State<HostAddResortStep7Pric
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildInventoryPriceCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required TextEditingController controller,
+    required String hint,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBF9FD),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE8DEF8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: AppColors.primary, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                    Text(subtitle, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          CustomTextField(
+            label: 'Rate / Night (₹)',
+            hint: hint,
+            controller: controller,
+          ),
+        ],
       ),
     );
   }

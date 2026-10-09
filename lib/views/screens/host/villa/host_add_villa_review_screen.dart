@@ -9,6 +9,7 @@ import '../host_property_submitted_thankyou_screen.dart';
 
 class HostAddVillaReviewScreen extends StatelessWidget {
   final String villaName;
+  final int totalVillas;
   final int bedrooms;
   final int bathrooms;
   final String formattedAddress;
@@ -22,6 +23,7 @@ class HostAddVillaReviewScreen extends StatelessWidget {
   const HostAddVillaReviewScreen({
     Key? key,
     required this.villaName,
+    this.totalVillas = 1,
     required this.bedrooms,
     required this.bathrooms,
     required this.formattedAddress,
@@ -36,7 +38,7 @@ class HostAddVillaReviewScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<Map<String, dynamic>> summarySections = [
-      {'title': 'Villa Details', 'value': '$bedrooms Bedrooms • $bathrooms Bathrooms • Entire $selectedCategory'},
+      {'title': 'Villa Details', 'value': '$totalVillas Villa(s) • $bedrooms Bed / Villa • $bathrooms Bath / Villa • Entire $selectedCategory'},
       {'title': 'Address', 'value': formattedAddress},
       {'title': 'Pricing', 'value': '$villaPrice / night'},
       {'title': 'Check-in / Check-out', 'value': '$checkInTime / $checkOutTime'},
@@ -173,9 +175,14 @@ class HostAddVillaReviewScreen extends StatelessWidget {
                         title: villaName,
                         type: selectedCategory,
                         propertyDetails: {
+                          'totalVillas': totalVillas,
+                          'villas': totalVillas,
+                          'totalUnits': totalVillas,
                           'bedrooms': bedrooms,
                           'bathrooms': bathrooms,
-                          'guests': bedrooms * 2,
+                          'bedroomsPerVilla': bedrooms,
+                          'bathroomsPerVilla': bathrooms,
+                          'guests': bedrooms * 2 * totalVillas,
                         },
                         bedrooms: bedrooms,
                         bathrooms: bathrooms,

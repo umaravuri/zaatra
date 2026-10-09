@@ -18,26 +18,41 @@ class AppEnv {
   }
 
   /// Backend API Base URL
-  /// Automatically uses `http://localhost:5000/api` when running on Chrome/Web (`kIsWeb`),
-  /// or loads `BASE_URL` / `WEB_BASE_URL` from `.env`.
+  /// Automatically uses `WEB_BASE_URL` (or localhost) when running on Chrome/Web (`kIsWeb`),
+  /// or loads `BASE_URL` from `.env` for mobile APK / devices.
   static String get baseUrl {
+    String rawUrl;
     if (kIsWeb) {
       final webUrl = dotenv.env['WEB_BASE_URL']?.trim();
-      if (webUrl != null && webUrl.isNotEmpty) {
-        return webUrl;
-      }
-      return 'http://localhost:5000/api';
+      rawUrl = (webUrl != null && webUrl.isNotEmpty) ? webUrl : 'http://localhost:5000/api';
+    } else {
+      final envUrl = dotenv.env['BASE_URL']?.trim();
+      rawUrl = (envUrl != null && envUrl.isNotEmpty)
+          ? envUrl
+          : 'https://8tbz4t2r-5000.inc1.devtunnels.ms/api';
     }
-
-    final envUrl = dotenv.env['BASE_URL']?.trim();
-    if (envUrl != null && envUrl.isNotEmpty) {
-      return envUrl;
-    }
-    return 'http://localhost:5000/api';
+    return _normalizeBaseUrl(rawUrl);
   }
 
-  /// Server root URL without '/api' suffix (e.g. 'http://localhost:5000')
-  static String get serverBaseUrl => baseUrl.replaceAll('/api', '');
+  static String _normalizeBaseUrl(String url) {
+    var trimmed = url.trim();
+    while (trimmed.endsWith('/')) {
+      trimmed = trimmed.substring(0, trimmed.length - 1);
+    }
+    if (!trimmed.endsWith('/api')) {
+      trimmed = '$trimmed/api';
+    }
+    return trimmed;
+  }
+
+  /// Server root URL without '/api' suffix (e.g. 'https://8tbz4t2r-5000.inc1.devtunnels.ms')
+  static String get serverBaseUrl {
+    var base = baseUrl;
+    if (base.endsWith('/api')) {
+      base = base.substring(0, base.length - 4);
+    }
+    return base;
+  }
 
   /// Google Maps Places & Directions API Key
   static String get googleMapsApiKey =>

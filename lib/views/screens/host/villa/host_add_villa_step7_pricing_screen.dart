@@ -6,6 +6,7 @@ import 'host_add_villa_step8_times_screen.dart';
 
 class HostAddVillaStep7PricingScreen extends StatefulWidget {
   final String villaName;
+  final int totalVillas;
   final int bedrooms;
   final int bathrooms;
   final String formattedAddress;
@@ -16,6 +17,7 @@ class HostAddVillaStep7PricingScreen extends StatefulWidget {
   const HostAddVillaStep7PricingScreen({
     Key? key,
     required this.villaName,
+    this.totalVillas = 1,
     required this.bedrooms,
     required this.bathrooms,
     required this.formattedAddress,
@@ -181,6 +183,7 @@ class _HostAddVillaStep7PricingScreenState extends State<HostAddVillaStep7Pricin
                               MaterialPageRoute(
                                 builder: (context) => HostAddVillaStep8TimesScreen(
                                   villaName: widget.villaName,
+                                  totalVillas: widget.totalVillas,
                                   bedrooms: widget.bedrooms,
                                   bathrooms: widget.bathrooms,
                                   formattedAddress: widget.formattedAddress,

@@ -52,6 +52,11 @@ class _RideConfirmedDetailScreen112State extends State<RideConfirmedDetailScreen
   String _bookingRequestDate = '';
   String _rideAcceptDate = '';
   String _rideAcceptedDate = '';
+  RidePreferences _preferences = const RidePreferences();
+  TripPassDetails? _tripPassDetails;
+  String _qrPassToken = '';
+  List<RoutePropertyItem> _routeProperties = [];
+  bool _isLoadingProperties = false;
 
   @override
   void initState() {
@@ -199,6 +204,9 @@ class _RideConfirmedDetailScreen112State extends State<RideConfirmedDetailScreen
           {'time': arrTime, 'title': drop, 'isFirst': false, 'isLast': true},
         ];
       }
+
+      // 8. Driver Preferences & Amenities
+      _preferences = s.driver.preferences;
     }
 
     if (widget.bookingData != null) {
@@ -208,11 +216,30 @@ class _RideConfirmedDetailScreen112State extends State<RideConfirmedDetailScreen
 
   Future<void> _fetchDynamicConfirmation() async {
     final effectiveId = _getEffectiveBookingId();
-    if (effectiveId.isEmpty) return;
+    if (effectiveId.isEmpty) {
+      _fetchRouteProperties();
+      return;
+    }
 
     setState(() => _isLoading = true);
 
     try {
+      // 1. Try fetching full Trip Pass Details (API 2: /api/rides/bookings/:id/pass)
+      final passRes = await RideService.getTripPassDetails(effectiveId);
+      if (passRes['success'] == true) {
+        final pass = TripPassDetails.fromJson(passRes);
+        if (mounted) {
+          setState(() {
+            _tripPassDetails = pass;
+            _applyTripPassDetails(pass);
+            _isLoading = false;
+          });
+        }
+        _fetchRouteProperties();
+        return;
+      }
+
+      // 2. Fallback to Ride Confirmation API (API 1: /api/rides/bookings/:id/confirmation)
       final res = await RideService.getRideConfirmation(effectiveId);
       if (res['success'] == true && res['data'] != null) {
         final data = res['data'] is Map<String, dynamic>
@@ -227,8 +254,76 @@ class _RideConfirmedDetailScreen112State extends State<RideConfirmedDetailScreen
       } else {
         if (mounted) setState(() => _isLoading = false);
       }
+      _fetchRouteProperties();
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
+      _fetchRouteProperties();
+    }
+  }
+
+  void _applyTripPassDetails(TripPassDetails pass) {
+    if (pass.bookingId.isNotEmpty) {
+      _bookingId = pass.bookingId.startsWith('#') ? pass.bookingId : '#${pass.bookingId}';
+    }
+    if (pass.headerDateTime.isNotEmpty) _displayDate = pass.headerDateTime;
+    if (pass.ticket.checkInDate.isNotEmpty) _checkInDate = pass.ticket.checkInDate;
+    if (pass.ticket.checkInTime.isNotEmpty) _checkInTime = pass.ticket.checkInTime;
+    if (pass.ticket.checkOutDate.isNotEmpty) _checkOutDate = pass.ticket.checkOutDate;
+    if (pass.ticket.checkOutTime.isNotEmpty) _checkOutTime = pass.ticket.checkOutTime;
+    if (pass.ticket.seatConfirmedValue.isNotEmpty) _seatConfirmed = pass.ticket.seatConfirmedValue;
+    if (pass.boardingPin.isNotEmpty) _boardingPin = pass.boardingPin;
+    if (pass.qrPassToken.isNotEmpty) _qrPassToken = pass.qrPassToken;
+    if (pass.driverName.isNotEmpty) _driverName = pass.driverName;
+    if (pass.driverPhone.isNotEmpty) _driverPhone = pass.driverPhone;
+    if (pass.driverAvatar.isNotEmpty) _driverAvatar = pass.driverAvatar;
+    if (pass.vehicleSummary.isNotEmpty) _driverDetails = pass.vehicleSummary;
+    if (pass.driverRating > 0) _driverRating = pass.driverRating.toStringAsFixed(1);
+    if (pass.bookingBy.isNotEmpty) _passengerName = pass.bookingBy;
+    if (pass.customerPhone.isNotEmpty) _passengerPhone = pass.customerPhone;
+    if (pass.bookingRequestDate.isNotEmpty) _bookingRequestDate = pass.bookingRequestDate;
+    if (pass.rideAcceptDate.isNotEmpty) _rideAcceptDate = pass.rideAcceptDate;
+    if (pass.rideAcceptedDate.isNotEmpty) _rideAcceptedDate = pass.rideAcceptedDate;
+    if (pass.coTravelersNote.isNotEmpty) _routeNote1 = pass.coTravelersNote;
+    if (pass.fuelShareNote.isNotEmpty) _routeNote2 = pass.fuelShareNote;
+
+    if (pass.routeStops.isNotEmpty) {
+      _timelineStops = pass.routeStops.asMap().entries.map((e) {
+        final stop = e.value;
+        return {
+          'time': stop.time.isNotEmpty ? stop.time : '${9 + e.key} : 00',
+          'title': stop.location,
+          'isFirst': stop.isStart || e.key == 0,
+          'isLast': stop.isEnd || e.key == pass.routeStops.length - 1,
+        };
+      }).toList();
+    }
+  }
+
+  Future<void> _fetchRouteProperties() async {
+    final session = widget.session;
+    String from = session?.pickup ?? '';
+    String to = session?.destination ?? '';
+    if (from.isEmpty && _timelineStops.isNotEmpty) from = _timelineStops.first['title']?.toString() ?? '';
+    if (to.isEmpty && _timelineStops.isNotEmpty) to = _timelineStops.last['title']?.toString() ?? '';
+    if (from.isEmpty) from = 'Hyderabad';
+    if (to.isEmpty) to = 'Vijayawada';
+
+    // Normalize from/to strings (take city name before comma)
+    from = from.split(',').first.trim();
+    to = to.split(',').first.trim();
+
+    setState(() => _isLoadingProperties = true);
+    final res = await RideService.getPropertiesAlongRoute(from: from, to: to);
+    if (mounted) {
+      setState(() {
+        _isLoadingProperties = false;
+        if (res['success'] == true && res['properties'] is List) {
+          _routeProperties = (res['properties'] as List)
+              .whereType<Map<String, dynamic>>()
+              .map((p) => RoutePropertyItem.fromJson(p))
+              .toList();
+        }
+      });
     }
   }
 
@@ -341,6 +436,12 @@ class _RideConfirmedDetailScreen112State extends State<RideConfirmedDetailScreen
 
     if (data['routeNote1'] != null) _routeNote1 = data['routeNote1'].toString();
     if (data['routeNote2'] != null) _routeNote2 = data['routeNote2'].toString();
+
+    // 7. Preferences & Amenities
+    final rawPrefs = data['preferences'] ?? data['ride']?['preferences'] ?? driver?['preferences'];
+    if (rawPrefs != null) {
+      _preferences = RidePreferences.fromJson(rawPrefs, rootJson: data);
+    }
   }
 
   Future<void> _makePhoneCall(String phoneNumber) async {
@@ -388,6 +489,13 @@ class _RideConfirmedDetailScreen112State extends State<RideConfirmedDetailScreen
   }
 
   void _showCancellationPolicySheet() {
+    final policyDesc = _tripPassDetails?.cancellationPolicyDescription.isNotEmpty == true
+        ? _tripPassDetails!.cancellationPolicyDescription
+        : '• Free cancellation up to 2 hours before scheduled departure.\n'
+            '• 50% refund for cancellations made within 2 hours of departure.\n'
+            '• No refund once the ride has commenced or after scheduled departure time.\n'
+            '• Refunds are credited back to the original payment method within 3-5 business days.';
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -403,9 +511,11 @@ class _RideConfirmedDetailScreen112State extends State<RideConfirmedDetailScreen
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Cancellation Policy',
-                  style: TextStyle(
+                Text(
+                  _tripPassDetails?.cancellationPolicyTitle.isNotEmpty == true
+                      ? _tripPassDetails!.cancellationPolicyTitle
+                      : 'Cancellation Policy',
+                  style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: AppColors.textPrimary,
@@ -418,12 +528,9 @@ class _RideConfirmedDetailScreen112State extends State<RideConfirmedDetailScreen
               ],
             ),
             const SizedBox(height: 12),
-            const Text(
-              '• Free cancellation up to 2 hours before scheduled departure.\n'
-              '• 50% refund for cancellations made within 2 hours of departure.\n'
-              '• No refund once the ride has commenced or after scheduled departure time.\n'
-              '• Refunds are credited back to the original payment method within 3-5 business days.',
-              style: TextStyle(fontSize: 14, color: Color(0xFF475569), height: 1.5),
+            Text(
+              policyDesc,
+              style: const TextStyle(fontSize: 14, color: Color(0xFF475569), height: 1.5),
             ),
             const SizedBox(height: 20),
             SizedBox(
@@ -451,7 +558,7 @@ class _RideConfirmedDetailScreen112State extends State<RideConfirmedDetailScreen
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Cancel Booking?', style: TextStyle(fontWeight: FontWeight.bold)),
         content: const Text(
-          'Are you sure you want to cancel this booking? Cancellation charges may apply as per the policy.',
+          'Are you sure you want to cancel this booking? Cancellation charges and refund will be processed as per the policy.',
           style: TextStyle(color: Color(0xFF64748B)),
         ),
         actions: [
@@ -498,13 +605,42 @@ class _RideConfirmedDetailScreen112State extends State<RideConfirmedDetailScreen
       setState(() => _isCancelling = false);
       if (mounted) {
         if (res['success'] == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(res['message']?.toString() ?? 'Booking cancelled successfully'),
-              backgroundColor: Colors.green,
+          final refundAmt = res['refundAmount'] ?? res['refund'] ?? '';
+          final refundMsg = (refundAmt != null && refundAmt.toString().isNotEmpty && refundAmt.toString() != '0')
+              ? ' Refund amount of ₹$refundAmt has been processed.'
+              : '';
+
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.check_circle_rounded, color: Colors.green, size: 24),
+                  SizedBox(width: 8),
+                  Text('Cancelled', style: TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: Text(
+                '${res['message'] ?? "Booking has been cancelled successfully."}$refundMsg',
+                style: const TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.4),
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF5945C7),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text('Done', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
             ),
           );
-          Navigator.pop(context);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -589,7 +725,17 @@ class _RideConfirmedDetailScreen112State extends State<RideConfirmedDetailScreen
 
                       const SizedBox(height: 24),
 
-                      // 7. Cancellation Policy Button
+                      // 7. Amenities & Preferences Section
+                      _buildPreferencesSection(),
+
+                      const SizedBox(height: 24),
+
+                      // 8. Stays & Stopovers Along Route (Scenario 1)
+                      _buildRoutePropertiesSection(),
+
+                      const SizedBox(height: 24),
+
+                      // 9. Cancellation Policy Button
                       _buildCancellationPolicyButton(),
 
                       const SizedBox(height: 14),
@@ -845,14 +991,14 @@ class _RideConfirmedDetailScreen112State extends State<RideConfirmedDetailScreen
     );
   }
 
-  // 3. Boarding PIN Banner
+  // 3. Boarding PIN & Digital Pass Banner
   Widget _buildBoardingPinBanner() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 14),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
       decoration: BoxDecoration(
         color: const Color(0xFF5945C7),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF5945C7).withValues(alpha: 0.2),
@@ -861,23 +1007,56 @@ class _RideConfirmedDetailScreen112State extends State<RideConfirmedDetailScreen
           ),
         ],
       ),
-      child: Center(
-        child: RichText(
-          text: TextSpan(
-            style: const TextStyle(
-              fontSize: 15,
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const TextSpan(text: 'Boarding PIN : '),
-              TextSpan(
-                text: _boardingPin,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              const Icon(Icons.pin_rounded, color: Colors.white, size: 18),
+              const SizedBox(width: 6),
+              RichText(
+                text: TextSpan(
+                  style: const TextStyle(
+                    fontSize: 15,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  children: [
+                    const TextSpan(text: 'Boarding PIN : '),
+                    TextSpan(
+                      text: _boardingPin,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, letterSpacing: 1),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-        ),
+          if (_qrPassToken.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.qr_code_2_rounded, size: 14, color: Colors.white),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'Pass Token: $_qrPassToken',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -1234,7 +1413,373 @@ class _RideConfirmedDetailScreen112State extends State<RideConfirmedDetailScreen
     );
   }
 
-  // 7. Cancellation Policy Button
+  // 7. Amenities & Preferences Section
+  Widget _buildPreferencesSection() {
+    final prefs = _preferences;
+    final hasAmenities = prefs.wifi || prefs.usbCharging || prefs.rideFeatures.isNotEmpty;
+    final hasRules = prefs.driverPreferences.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Ride amenities & policies',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Luggage allowance row
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3EDF7),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.luggage_outlined, size: 20, color: AppColors.primary),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Luggage Allowance',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${prefs.luggageCount} Large Bag and ${prefs.mediumBagCount} Medium Bag per seat',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              if (hasAmenities) ...[
+                const SizedBox(height: 14),
+                const Divider(color: Color(0xFFF1F5F9), height: 1),
+                const SizedBox(height: 12),
+                const Text(
+                  'Included Amenities',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    if (prefs.wifi) _buildConfirmedAmenityChip(Icons.wifi_rounded, 'Free WiFi'),
+                    if (prefs.usbCharging) _buildConfirmedAmenityChip(Icons.power_rounded, 'USB Charging'),
+                    for (final f in prefs.rideFeatures)
+                      if (f != 'Free WiFi' && f != 'USB Charging')
+                        _buildConfirmedAmenityChip(Icons.check_circle_outline_rounded, f),
+                  ],
+                ),
+              ],
+
+              if (hasRules) ...[
+                const SizedBox(height: 14),
+                const Divider(color: Color(0xFFF1F5F9), height: 1),
+                const SizedBox(height: 12),
+                const Text(
+                  'Driver Rules & Preferences',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final r in prefs.driverPreferences)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Text(
+                          '• $r',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildConfirmedAmenityChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F5E9),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFA5D6A7)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: const Color(0xFF2E7D32)),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1B5E20)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 8. Stays & Stopovers Along Route (Scenario 1)
+  Widget _buildRoutePropertiesSection() {
+    if (_routeProperties.isEmpty && !_isLoadingProperties) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Stays & Stopovers Along Route',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            if (_routeProperties.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3EDF7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${_routeProperties.length} available',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Top-rated Zaatra hotels, resorts & villas along your route for resting or overnight stays.',
+          style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.3),
+        ),
+        const SizedBox(height: 12),
+        if (_isLoadingProperties)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 20.0),
+              child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2.5),
+            ),
+          )
+        else
+          SizedBox(
+            height: 220,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _routeProperties.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 14),
+              itemBuilder: (context, index) {
+                final prop = _routeProperties[index];
+                return _buildPropertyCard(prop);
+              },
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildPropertyCard(RoutePropertyItem prop) {
+    return Container(
+      width: 210,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Image / Thumbnail
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            child: Container(
+              height: 95,
+              width: double.infinity,
+              color: const Color(0xFFF3EDF7),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (prop.image.isNotEmpty && prop.image.startsWith('http'))
+                    Image.network(
+                      prop.image,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Center(
+                        child: Icon(Icons.hotel_rounded, color: AppColors.primary, size: 36),
+                      ),
+                    )
+                  else
+                    const Center(
+                      child: Icon(Icons.hotel_rounded, color: AppColors.primary, size: 36),
+                    ),
+                  // Type Tag
+                  Positioned(
+                    top: 6,
+                    left: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.65),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        prop.type,
+                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                  // Rating Tag
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(6),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.star_rounded, size: 12, color: Color(0xFFFFB800)),
+                          const SizedBox(width: 2),
+                          Text(
+                            prop.rating.toStringAsFixed(1),
+                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(10.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  prop.title,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    const Icon(Icons.near_me_outlined, size: 11, color: AppColors.textSecondary),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        prop.distanceFormatted.isNotEmpty
+                            ? prop.distanceFormatted
+                            : '${prop.city} (${prop.distanceFromRouteKm.toInt()} km off route)',
+                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          prop.priceFormatted.isNotEmpty ? prop.priceFormatted : '₹${prop.price.toInt()}/night',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
+                        ),
+                        if (prop.pricePerHourFormatted.isNotEmpty)
+                          Text(
+                            prop.pricePerHourFormatted,
+                            style: const TextStyle(fontSize: 10, color: Color(0xFF2E7D32), fontWeight: FontWeight.w600),
+                          ),
+                      ],
+                    ),
+                    InkWell(
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Opening ${prop.title}...'),
+                            backgroundColor: AppColors.primary,
+                          ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'Book Stay',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 9. Cancellation Policy Button
   Widget _buildCancellationPolicyButton() {
     return OutlinedButton.icon(
       onPressed: _showCancellationPolicySheet,

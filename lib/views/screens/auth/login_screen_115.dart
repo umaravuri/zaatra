@@ -238,26 +238,21 @@ class _LoginScreenState extends State<LoginScreen> {
         ?.toString()
         .toLowerCase();
 
-    // 2. Query Driver status to check if this user has an existing driver profile/application
-    Map<String, dynamic> driverStatusResult = {};
-    try {
-      driverStatusResult = await DriverService.getDriverApprovalStatus(phone: matchedPhone);
-    } catch (_) {}
-
-    final bool hasDriverProfile = driverStatusResult['success'] == true && driverStatusResult['driver'] != null;
-
-    // 3. Authoritatively resolve the active role
+    // 2. Authoritatively resolve the active role directly without speculative network pre-probing
     String role = 'customer';
-    if (backendUserRole == 'driver' || hasDriverProfile) {
+    if (backendUserRole == 'driver') {
       role = 'driver';
     } else if (backendUserRole == 'host') {
       role = 'host';
+    } else if (backendUserRole == 'customer') {
+      role = 'customer';
     } else {
-      role = prefs.getString('user_role_$cleanDigits') ??
+      final localRole = prefs.getString('user_role_$cleanDigits') ??
           prefs.getString('last_registered_role') ??
-          prefs.getString('currentUserRole') ??
-          backendUserRole ??
-          'customer';
+          prefs.getString('currentUserRole');
+      if (localRole != null && (localRole == 'driver' || localRole == 'host' || localRole == 'customer')) {
+        role = localRole;
+      }
     }
 
     // 🚀 Complete authentication with selectRoleMobile to fetch JWT token & active user profile

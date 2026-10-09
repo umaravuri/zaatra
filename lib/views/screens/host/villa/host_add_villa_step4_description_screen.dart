@@ -5,6 +5,7 @@ import 'host_add_villa_step5_amenities_screen.dart';
 
 class HostAddVillaStep4DescriptionScreen extends StatefulWidget {
   final String villaName;
+  final int totalVillas;
   final int bedrooms;
   final int bathrooms;
   final String formattedAddress;
@@ -13,6 +14,7 @@ class HostAddVillaStep4DescriptionScreen extends StatefulWidget {
   const HostAddVillaStep4DescriptionScreen({
     Key? key,
     required this.villaName,
+    this.totalVillas = 1,
     required this.bedrooms,
     required this.bathrooms,
     required this.formattedAddress,
@@ -137,6 +139,7 @@ class _HostAddVillaStep4DescriptionScreenState extends State<HostAddVillaStep4De
                               MaterialPageRoute(
                                 builder: (context) => HostAddVillaStep5AmenitiesScreen(
                                   villaName: widget.villaName,
+                                  totalVillas: widget.totalVillas,
                                   bedrooms: widget.bedrooms,
                                   bathrooms: widget.bathrooms,
                                   formattedAddress: widget.formattedAddress,

@@ -149,6 +149,8 @@ class _HostAddGuestHouseStep2DetailsScreenState extends State<HostAddGuestHouseS
                         'bathrooms': _attachedBaths + _sharedBaths,
                         'capacity': _maxGuests,
                         'guests': _maxGuests,
+                        'parkingCapacity': _guestRooms,
+                        'vehicleParkingCapacity': '$_guestRooms Cars',
                       };
 
                       Navigator.push(

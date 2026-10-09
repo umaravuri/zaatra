@@ -5,6 +5,7 @@ import '../common/host_add_property_step9_upload_common.dart';
 
 class HostAddVillaStep8TimesScreen extends StatefulWidget {
   final String villaName;
+  final int totalVillas;
   final int bedrooms;
   final int bathrooms;
   final String formattedAddress;
@@ -16,6 +17,7 @@ class HostAddVillaStep8TimesScreen extends StatefulWidget {
   const HostAddVillaStep8TimesScreen({
     Key? key,
     required this.villaName,
+    this.totalVillas = 1,
     required this.bedrooms,
     required this.bathrooms,
     required this.formattedAddress,
@@ -194,9 +196,14 @@ class _HostAddVillaStep8TimesScreenState extends State<HostAddVillaStep8TimesScr
                                   selectedCategory: widget.selectedCategory,
                                   propertyName: widget.villaName,
                                   propertyDetails: {
+                                    'totalVillas': widget.totalVillas,
+                                    'villas': widget.totalVillas,
+                                    'totalUnits': widget.totalVillas,
                                     'bedrooms': widget.bedrooms,
                                     'bathrooms': widget.bathrooms,
-                                    'guests': widget.bedrooms * 2,
+                                    'bedroomsPerVilla': widget.bedrooms,
+                                    'bathroomsPerVilla': widget.bathrooms,
+                                    'guests': widget.bedrooms * 2 * widget.totalVillas,
                                   },
                                   addressMap: {
                                     'streetRoad': widget.formattedAddress,

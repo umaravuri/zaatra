@@ -12,14 +12,14 @@ class HostAddGuestHouseStep5AmenitiesScreen extends StatefulWidget {
   final String description;
 
   const HostAddGuestHouseStep5AmenitiesScreen({
-    Key? key,
+    super.key,
     required this.selectedCategory,
     required this.propertyName,
     required this.propertyDetails,
     required this.addressMap,
     required this.formattedAddress,
     required this.description,
-  }) : super(key: key);
+  });
 
   @override
   State<HostAddGuestHouseStep5AmenitiesScreen> createState() => _HostAddGuestHouseStep5AmenitiesScreenState();
@@ -27,29 +27,59 @@ class HostAddGuestHouseStep5AmenitiesScreen extends StatefulWidget {
 
 class _HostAddGuestHouseStep5AmenitiesScreenState extends State<HostAddGuestHouseStep5AmenitiesScreen> {
   final Set<String> _selectedAmenities = {};
+  final TextEditingController _customAmenityController = TextEditingController();
 
-  final List<Map<String, dynamic>> _guesthouseAmenities = [
-    // Homestay Comforts
-    {'title': 'Homely Cooked Meals', 'icon': Icons.soup_kitchen_rounded, 'isPremium': true},
-    {'title': 'RO Drinking Water', 'icon': Icons.water_damage_rounded, 'isPremium': true},
-    {'title': 'Shared Kitchen', 'icon': Icons.kitchen_rounded, 'isPremium': true},
-    {'title': 'Washing Machine', 'icon': Icons.local_laundry_service_rounded, 'isPremium': true},
+  final List<Map<String, dynamic>> _guestHouseAmenities = [
+    // Highlights
+    {'title': 'Shared Living Lounge', 'icon': Icons.weekend_rounded, 'isPremium': true},
+    {'title': 'Shared Kitchen Access', 'icon': Icons.soup_kitchen_rounded, 'isPremium': true},
+    {'title': 'Terrace / Balcony', 'icon': Icons.deck_rounded, 'isPremium': true},
+    {'title': 'Home Cooked Meals', 'icon': Icons.restaurant_rounded, 'isPremium': true},
+    {'title': 'Luggage Storage', 'icon': Icons.luggage_rounded, 'isPremium': true},
+    {'title': 'Private Work Desk', 'icon': Icons.desk_rounded, 'isPremium': true},
+    {'title': 'Doctor on Call', 'icon': Icons.medical_services_rounded, 'isPremium': true},
     {'title': 'Daily Housekeeping', 'icon': Icons.cleaning_services_rounded, 'isPremium': true},
-    {'title': 'Common Living Hall', 'icon': Icons.weekend_rounded, 'isPremium': true},
-    {'title': 'Work Desk & Chair', 'icon': Icons.desk_rounded, 'isPremium': true},
-    {'title': 'Power Backup', 'icon': Icons.electric_bolt_rounded, 'isPremium': true},
 
-    // Standard Room Amenities
-    {'title': 'Wi-Fi', 'icon': Icons.wifi_rounded, 'isPremium': false},
-    {'title': 'Air Conditioning', 'icon': Icons.ac_unit_rounded, 'isPremium': false},
-    {'title': 'TV with Cable', 'icon': Icons.tv_rounded, 'isPremium': false},
-    {'title': 'Hot Water Geyser', 'icon': Icons.bathtub_rounded, 'isPremium': false},
-    {'title': 'Free Parking', 'icon': Icons.local_parking_rounded, 'isPremium': false},
-    {'title': '24/7 CCTV Security', 'icon': Icons.security_rounded, 'isPremium': false},
+    // Standard Essentials
+    {'title': 'Free High-Speed Wi-Fi', 'icon': Icons.wifi_rounded, 'isPremium': false},
+    {'title': 'Air Conditioning (AC)', 'icon': Icons.ac_unit_rounded, 'isPremium': false},
+    {'title': 'TV with Cable / OTT', 'icon': Icons.tv_rounded, 'isPremium': false},
+    {'title': 'Hot Water Geyser', 'icon': Icons.water_drop_rounded, 'isPremium': false},
+    {'title': 'Car / Bike Parking', 'icon': Icons.local_parking_rounded, 'isPremium': false},
+    {'title': 'Power Backup Generator', 'icon': Icons.bolt_rounded, 'isPremium': false},
   ];
 
   @override
+  void dispose() {
+    _customAmenityController.dispose();
+    super.dispose();
+  }
+
+  void _addCustomAmenity() {
+    final text = _customAmenityController.text.trim();
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter an amenity name.'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+    if (_selectedAmenities.contains(text)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This amenity is already added.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+    setState(() {
+      _selectedAmenities.add(text);
+      _customAmenityController.clear();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final premiumAmenities = _guestHouseAmenities.where((a) => a['isPremium'] == true).toList();
+    final standardAmenities = _guestHouseAmenities.where((a) => a['isPremium'] == false).toList();
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -57,11 +87,11 @@ class _HostAddGuestHouseStep5AmenitiesScreenState extends State<HostAddGuestHous
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Column(
-          children: const [
+        title: const Column(
+          children: [
             Text('Add new property', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 16)),
             SizedBox(height: 2),
-            Text('Set 5 by 9 (Guest House Amenities)', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+            Text('Step 5 of 9 (Guest House Amenities)', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
           ],
         ),
         centerTitle: true,
@@ -90,103 +120,70 @@ class _HostAddGuestHouseStep5AmenitiesScreenState extends State<HostAddGuestHous
                 _buildProgressBar(5),
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(20.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Guest House Amenities', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                        const Text(
+                          'Guest House Amenities',
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                        ),
                         const SizedBox(height: 4),
-                        const Text('Select homestay amenities, kitchen, meal options and services provided', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                        const SizedBox(height: 22),
+                        const Text(
+                          'Select shared comforts, home amenities & services for your guest house stay',
+                          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                        ),
+                        const SizedBox(height: 20),
 
-                        // Section 1: Homestay Highlights
-                        Row(
-                          children: const [
-                            Icon(Icons.home_outlined, color: AppColors.primary, size: 22),
-                            SizedBox(width: 8),
-                            Text('Homestay & Shared Facilities', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                          ],
+                        // Section 1: Highlights
+                        _buildSectionHeader(
+                          title: 'Shared Living & Host Features',
+                          subtitle: 'Common areas, kitchen & dining access',
+                          icon: Icons.stars_rounded,
                         ),
                         const SizedBox(height: 12),
-
-                        _buildAmenityGrid(_guesthouseAmenities.where((a) => a['isPremium'] == true).toList()),
+                        _buildAmenityPairsList(premiumAmenities),
 
                         const SizedBox(height: 24),
 
-                        // Section 2: Room Facilities
-                        Row(
-                          children: const [
-                            Icon(Icons.check_circle_outline_rounded, color: AppColors.textSecondary, size: 20),
-                            SizedBox(width: 8),
-                            Text('Room Essentials & Utilities', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                          ],
+                        // Section 2: Standard Essentials
+                        _buildSectionHeader(
+                          title: 'Standard Room Essentials',
+                          subtitle: 'Utilities & guest conveniences',
+                          icon: Icons.check_circle_outline_rounded,
                         ),
                         const SizedBox(height: 12),
+                        _buildAmenityPairsList(standardAmenities),
 
-                        _buildAmenityGrid(_guesthouseAmenities.where((a) => a['isPremium'] == false).toList()),
+                        const SizedBox(height: 24),
+
+                        // Section 3: Add Custom Amenity
+                        _buildCustomAmenityInput(),
 
                         const SizedBox(height: 24),
 
                         // Selected Summary Chips
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF9F9FB),
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: const Color(0xFFE8DEF8)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Selected Amenities (${_selectedAmenities.length})',
-                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                              ),
-                              const SizedBox(height: 12),
-                              if (_selectedAmenities.isEmpty)
-                                const Text('No amenities selected.', style: TextStyle(fontSize: 12, color: AppColors.textMuted))
-                              else
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: _selectedAmenities.map((item) {
-                                    return Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF3EDF7),
-                                        borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(color: AppColors.primary.withOpacity(0.3)),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            item,
-                                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          GestureDetector(
-                                            onTap: () => setState(() => _selectedAmenities.remove(item)),
-                                            child: const Icon(Icons.close_rounded, size: 14, color: AppColors.primary),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
-                            ],
-                          ),
-                        ),
+                        _buildSelectedSummary(),
 
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 24),
                       ],
                     ),
                   ),
                 ),
 
-                Padding(
-                  padding: const EdgeInsets.all(20.0),
+                // Bottom Navigation Buttons
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 10,
+                        offset: const Offset(0, -4),
+                      ),
+                    ],
+                  ),
                   child: Row(
                     children: [
                       Expanded(
@@ -206,8 +203,8 @@ class _HostAddGuestHouseStep5AmenitiesScreenState extends State<HostAddGuestHous
                             if (_selectedAmenities.isEmpty) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Please select at least one amenity to proceed.'),
-                                  backgroundColor: Colors.redAccent,
+                                  content: Text('Please select or add at least 1 amenity for your guest house.'),
+                                  backgroundColor: Colors.red,
                                 ),
                               );
                               return;
@@ -240,68 +237,256 @@ class _HostAddGuestHouseStep5AmenitiesScreenState extends State<HostAddGuestHous
     );
   }
 
-  Widget _buildAmenityGrid(List<Map<String, dynamic>> list) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 1.5,
-      ),
-      itemCount: list.length,
-      itemBuilder: (context, index) {
-        final item = list[index];
-        final title = item['title'] as String;
-        final isSelected = _selectedAmenities.contains(title);
-        final isPremium = item['isPremium'] == true;
+  Widget _buildSectionHeader({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: AppColors.primary, size: 22),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+              Text(subtitle, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
-        return GestureDetector(
-          onTap: () {
-            setState(() {
-              if (isSelected) {
-                _selectedAmenities.remove(title);
-              } else {
-                _selectedAmenities.add(title);
-              }
-            });
-          },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFFF3EDF7) : Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isSelected ? AppColors.primary : (isPremium ? AppColors.primary.withOpacity(0.35) : AppColors.border),
-                width: isSelected ? 1.6 : 1,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  item['icon'] as IconData,
-                  color: isSelected ? AppColors.primary : (isPremium ? const Color(0xFF1976D2) : AppColors.textSecondary),
-                  size: 18,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                      color: isSelected ? AppColors.primary : AppColors.textPrimary,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
+  Widget _buildAmenityPairsList(List<Map<String, dynamic>> list) {
+    final List<List<Map<String, dynamic>>> rows = [];
+    for (int i = 0; i < list.length; i += 2) {
+      rows.add(list.sublist(i, (i + 2 <= list.length) ? i + 2 : list.length));
+    }
+
+    return Column(
+      children: rows.map((rowItems) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10.0),
+          child: Row(
+            children: [
+              Expanded(child: _buildAmenityCard(rowItems[0])),
+              const SizedBox(width: 10),
+              if (rowItems.length > 1)
+                Expanded(child: _buildAmenityCard(rowItems[1]))
+              else
+                const Expanded(child: SizedBox.shrink()),
+            ],
           ),
         );
+      }).toList(),
+    );
+  }
+
+  Widget _buildAmenityCard(Map<String, dynamic> item) {
+    final title = item['title'] as String;
+    final isSelected = _selectedAmenities.contains(title);
+    final isPremium = item['isPremium'] == true;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () {
+        setState(() {
+          if (isSelected) {
+            _selectedAmenities.remove(title);
+          } else {
+            _selectedAmenities.add(title);
+          }
+        });
       },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFF3EDF7) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.primary
+                : (isPremium ? AppColors.primary.withValues(alpha: 0.35) : AppColors.border),
+            width: isSelected ? 1.6 : 1.0,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: isSelected ? AppColors.primary.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.02),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(
+              item['icon'] as IconData,
+              color: isSelected
+                  ? AppColors.primary
+                  : (isPremium ? const Color(0xFFE65100) : AppColors.textSecondary),
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                  color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomAmenityInput() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBF9FD),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE8DEF8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.add_circle_outline_rounded, color: AppColors.primary, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Add Custom Amenity',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Add any unique amenities or features provided at your guest house',
+            style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _customAmenityController,
+                  style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                  decoration: InputDecoration(
+                    hintText: 'e.g. Ironing Kit, Books & Board Games',
+                    hintStyle: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFE8DEF8)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFE8DEF8)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                    ),
+                  ),
+                  onSubmitted: (_) => _addCustomAmenity(),
+                ),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: _addCustomAmenity,
+                child: const Text('+ Add', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectedSummary() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9F9FB),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE8DEF8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Selected Amenities (${_selectedAmenities.length})',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              ),
+              if (_selectedAmenities.isNotEmpty)
+                GestureDetector(
+                  onTap: () => setState(() => _selectedAmenities.clear()),
+                  child: const Text(
+                    'Clear All',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.red),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_selectedAmenities.isEmpty)
+            const Text('No amenities selected yet.', style: TextStyle(fontSize: 12, color: AppColors.textMuted))
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _selectedAmenities.map((item) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3EDF7),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        item,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
+                      ),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () => setState(() => _selectedAmenities.remove(item)),
+                        child: const Icon(Icons.close_rounded, size: 14, color: AppColors.primary),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+        ],
+      ),
     );
   }
 
@@ -312,23 +497,13 @@ class _HostAddGuestHouseStep5AmenitiesScreenState extends State<HostAddGuestHous
         children: List.generate(9, (index) {
           final isCompleted = index < currentStep;
           return Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    height: 4,
-                    color: isCompleted ? AppColors.primary : const Color(0xFFF3EDF7),
-                  ),
-                ),
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: isCompleted ? AppColors.primary : const Color(0xFFF3EDF7),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ],
+            child: Container(
+              height: 4,
+              margin: EdgeInsets.only(right: index == 8 ? 0 : 4),
+              decoration: BoxDecoration(
+                color: isCompleted ? AppColors.primary : const Color(0xFFF3EDF7),
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           );
         }),

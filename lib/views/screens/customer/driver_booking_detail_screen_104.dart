@@ -316,50 +316,8 @@ class _DriverBookingDetailScreenState extends State<DriverBookingDetailScreen> {
 
                         const SizedBox(height: 16),
 
-                        // Interactive Map Preview Container matching 104.png
-                        Container(
-                          height: 140,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF3EDF7),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          child: Stack(
-                            children: [
-                              Center(
-                                child: Icon(
-                                  Icons.map_rounded,
-                                  size: 64,
-                                  color: AppColors.primary.withValues(alpha: 0.15),
-                                ),
-                              ),
-                              Center(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(20),
-                                    boxShadow: [
-                                      BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 6),
-                                    ],
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.navigation_rounded, color: AppColors.primary, size: 18),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        'View live map route',
-                                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        // Ride Amenities & Driver Preferences Card
+                        _buildPreferencesSection(driver.preferences),
 
                         const SizedBox(height: 16),
                       ],
@@ -747,5 +705,213 @@ class _DriverBookingDetailScreenState extends State<DriverBookingDetailScreen> {
       );
     }
     return content;
+  }
+
+  Widget _buildPreferencesSection(RidePreferences prefs) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          const Row(
+            children: [
+              Icon(Icons.tune_rounded, size: 18, color: AppColors.primary),
+              SizedBox(width: 8),
+              Text(
+                'Ride Amenities & Policies',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Booking Approval Banner
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: prefs.autoApproval ? const Color(0xFFE8F5E9) : const Color(0xFFFFF8E1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: prefs.autoApproval ? const Color(0xFF81C784) : const Color(0xFFFFD54F),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  prefs.autoApproval ? Icons.bolt_rounded : Icons.hourglass_top_rounded,
+                  color: prefs.autoApproval ? const Color(0xFF2E7D32) : const Color(0xFFF57F17),
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        prefs.autoApproval ? 'Instant Confirmation' : 'Driver Approval Required',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: prefs.autoApproval ? const Color(0xFF2E7D32) : const Color(0xFFE65100),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        prefs.autoApproval
+                            ? 'Your booking is immediately confirmed upon requesting.'
+                            : 'Driver will review and accept your booking request.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: prefs.autoApproval ? const Color(0xFF388E3C) : const Color(0xFFBF360C),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
+          // Luggage Allowance Box
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8F9FA),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFEEEEEE)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.luggage_rounded, color: AppColors.primary, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Luggage Allowance',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Max ${prefs.luggageCount} Large Bag and ${prefs.mediumBagCount} Medium Bag per passenger',
+                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
+          // Amenities Grid / Chips
+          const Text(
+            'Included Amenities',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 8),
+
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildAmenityChip(Icons.wifi_rounded, 'Free WiFi', prefs.wifi),
+              _buildAmenityChip(Icons.power_rounded, 'USB Charging', prefs.usbCharging),
+              for (final f in prefs.rideFeatures)
+                if (f != 'Free WiFi' && f != 'USB Charging')
+                  _buildAmenityChip(Icons.check_circle_rounded, f, true),
+            ],
+          ),
+
+          if (prefs.driverPreferences.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            const Text(
+              'Driver Rules & Preferences',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final pref in prefs.driverPreferences)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3EDF7),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.info_outline_rounded, size: 14, color: AppColors.primary),
+                        const SizedBox(width: 6),
+                        Text(
+                          pref,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAmenityChip(IconData icon, String label, bool isAvailable) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isAvailable ? const Color(0xFFE8F5E9) : const Color(0xFFFAFAFA),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isAvailable ? const Color(0xFFA5D6A7) : const Color(0xFFE0E0E0),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: isAvailable ? const Color(0xFF2E7D32) : const Color(0xFFBDBDBD),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isAvailable ? const Color(0xFF1B5E20) : const Color(0xFF9E9E9E),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

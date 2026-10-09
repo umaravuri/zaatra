@@ -208,22 +208,21 @@ class RideService {
     }
   }
 
-  /// Get Ride Confirmation Screen Payload: GET /api/bookings/:bookingId/confirmation
-  /// Supports direct alias /api/rides/bookings/:bookingId/confirmation and standard /api/bookings/:bookingId
+  /// API 1: Get Ride Confirmation Screen Payload: GET /api/rides/bookings/:id/confirmation (or /api/bookings/:id/confirmation)
   static Future<Map<String, dynamic>> getRideConfirmation(String bookingId) async {
     try {
-      final cleanId = bookingId.trim();
-      var res = await ApiService.get('/bookings/$cleanId/confirmation');
+      final cleanId = bookingId.trim().replaceAll('#', '');
+      var res = await ApiService.get('/rides/bookings/$cleanId/confirmation');
       if (res['success'] == true) return res;
 
-      res = await ApiService.get('/rides/bookings/$cleanId/confirmation');
+      res = await ApiService.get('/bookings/$cleanId/confirmation');
       if (res['success'] == true) return res;
 
       return await ApiService.get('/bookings/$cleanId');
     } catch (e) {
       try {
-        final cleanId = bookingId.trim();
-        return await ApiService.get('/rides/bookings/$cleanId/confirmation');
+        final cleanId = bookingId.trim().replaceAll('#', '');
+        return await ApiService.get('/bookings/$cleanId/confirmation');
       } catch (_) {
         return {
           'success': false,
@@ -233,14 +232,41 @@ class RideService {
     }
   }
 
-  /// Cancel Booking: POST /api/bookings/:bookingId/cancel or DELETE /api/bookings/:bookingId
+  /// API 2: Get View Trip Details & Digital Pass: GET /api/rides/bookings/:id/pass (or /api/bookings/:id/trip-details)
+  static Future<Map<String, dynamic>> getTripPassDetails(String bookingId) async {
+    try {
+      final cleanId = bookingId.trim().replaceAll('#', '');
+      var res = await ApiService.get('/rides/bookings/$cleanId/pass');
+      if (res['success'] == true) return res;
+
+      res = await ApiService.get('/bookings/$cleanId/trip-details');
+      if (res['success'] == true) return res;
+
+      return await ApiService.get('/rides/bookings/$cleanId/trip-details');
+    } catch (e) {
+      try {
+        final cleanId = bookingId.trim().replaceAll('#', '');
+        return await ApiService.get('/bookings/$cleanId/trip-details');
+      } catch (_) {
+        return {
+          'success': false,
+          'message': 'Failed to fetch trip pass details: $e',
+        };
+      }
+    }
+  }
+
+  /// API 3: Cancel Booking: POST /api/bookings/:id/cancel
   static Future<Map<String, dynamic>> cancelBooking(String bookingId, {String? reason}) async {
     try {
-      final cleanId = bookingId.trim();
+      final cleanId = bookingId.trim().replaceAll('#', '');
       final body = <String, dynamic>{
         'reason': reason ?? 'Cancelled by passenger',
       };
       var res = await ApiService.post('/bookings/$cleanId/cancel', body);
+      if (res['success'] == true) return res;
+
+      res = await ApiService.post('/rides/bookings/$cleanId/cancel', body);
       if (res['success'] == true) return res;
 
       return await ApiService.delete('/bookings/$cleanId');
@@ -248,6 +274,55 @@ class RideService {
       return {
         'success': false,
         'message': 'Failed to cancel booking: $e',
+      };
+    }
+  }
+
+  /// Scenario 1: Pre-Trip / Scheduled Route Stays: GET /api/properties/along-route?from=...&to=...&limit=10
+  static Future<Map<String, dynamic>> getPropertiesAlongRoute({
+    required String from,
+    required String to,
+    int limit = 10,
+  }) async {
+    try {
+      final queryParams = [
+        'from=${Uri.encodeComponent(from)}',
+        'to=${Uri.encodeComponent(to)}',
+        'limit=$limit',
+      ];
+      final res = await ApiService.get('/properties/along-route?${queryParams.join('&')}');
+      return res;
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to fetch properties along route: $e',
+        'properties': [],
+      };
+    }
+  }
+
+  /// Scenario 2: Live In-Trip Real-Time GPS Tracking: GET /api/properties/nearby-live?lat=...&lng=...&radiusKm=15
+  static Future<Map<String, dynamic>> getNearbyLiveProperties({
+    required double lat,
+    required double lng,
+    double radiusKm = 15,
+    int limit = 5,
+  }) async {
+    try {
+      final queryParams = [
+        'lat=$lat',
+        'lng=$lng',
+        'radiusKm=$radiusKm',
+        'limit=$limit',
+      ];
+      final res = await ApiService.get('/properties/nearby-live?${queryParams.join('&')}');
+      return res;
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to fetch live nearby properties: $e',
+        'properties': [],
+        'propertyMarkers': [],
       };
     }
   }

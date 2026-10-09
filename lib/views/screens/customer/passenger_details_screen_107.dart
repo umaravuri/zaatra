@@ -5,7 +5,7 @@ import '../../../models/ride_booking_model.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/ride_service.dart';
 import '../../widgets/custom_button.dart';
-import 'payment_method_screen_57.dart';
+import 'ride_awaiting_confirmation_screen.dart';
 
 /// ============================================================================
 /// SCREEN DATA ARCHITECTURE & API DEPENDENCY SPECIFICATION
@@ -24,7 +24,7 @@ import 'payment_method_screen_57.dart';
 ///      need to retype their profile information.
 ///
 /// B) [API 2: Ride Booking Creation]
-///    - Invoked: On "Proceed to Payment" tap via `RideService.createBooking(...)`
+///    - Invoked: On "Book Ride" tap via `RideService.createBooking(...)`
 ///    - Endpoint: `POST /api/rides/book`
 ///    - Payload Dispatched (Frontend -> Backend):
 ///        • `rideId`: Driver's published ride ID (from session)
@@ -34,7 +34,7 @@ import 'payment_method_screen_57.dart';
 ///        • `numberOfSeats`: Selected count from dropdown (1..4)
 ///        • `boardingPoint` / `pickup`: Selected boarding/pickup location
 ///        • `destination`: Ride drop-off point
-///        • `customerPickupAddress`, `customerPickupPincode`, `customerPickupLandmark`
+///        • `paymentMethod`: "PAY_TO_DRIVER" (cash/UPI directly to driver)
 ///        • `doorstepPickupRequested`: Boolean flag (true if doorstep selected)
 ///        • `extraPickupCharge`: Detour fee amount
 ///        • `pricePerSeat`: Price per seat defined on driver ride
@@ -42,10 +42,8 @@ import 'payment_method_screen_57.dart';
 ///        • `luggage`: Selected luggage type (e.g. "1 Medium Bag")
 ///    - Response Received (Backend -> Frontend):
 ///        • `bookingId` / `id` / `_id`: Unique booking identifier created in DB
-///        • `razorpayOrderId` / `orderId`: Order ID for Razorpay checkout
 ///        • `success`: Boolean status flag
-///    - Usage: Transitions to [PaymentMethodScreen] carrying the verified
-///      `bookingId` and `razorpayOrderId` for payment execution.
+///    - Usage: Transitions to [RideAwaitingConfirmationScreen] waiting for driver approval.
 ///
 /// ----------------------------------------------------------------------------
 /// 2. FIELD CLASSIFICATION (DYNAMIC vs STATIC):
@@ -65,7 +63,7 @@ import 'payment_method_screen_57.dart';
 ///      "Number Of Seats", "Fare Summary", "Total Payable".
 ///    - Phone prefix badge: "+91 "
 ///    - Bottom background illustration: `assets/images/image 31.png`
-///    - Button CTA: "Proceed to Payment"
+///    - Button CTA: "Book Ride"
 /// ============================================================================
 class PassengerDetailsScreen extends StatefulWidget {
   final RideBookingSession? session;
@@ -149,7 +147,7 @@ class _PassengerDetailsScreenState extends State<PassengerDetailsScreen> {
 
   bool _isSubmitting = false;
 
-  Future<void> _handleProceedToPayment(RideBookingSession session, double totalFare) async {
+  Future<void> _handleBookRide(RideBookingSession session, double totalFare) async {
     final firstName = _firstNameController.text.trim();
     final lastName = _lastNameController.text.trim();
     final fullName = '$firstName $lastName'.trim();
@@ -198,6 +196,7 @@ class _PassengerDetailsScreenState extends State<PassengerDetailsScreen> {
       extraPickupCharge: session.detourCharge,
       pricePerSeat: session.driver.pricePerSeat,
       totalAmount: totalFare,
+      paymentMethod: 'PAY_TO_DRIVER',
       luggage: session.luggage.isNotEmpty ? session.luggage : "1 Medium Bag",
     );
 
@@ -219,36 +218,29 @@ class _PassengerDetailsScreenState extends State<PassengerDetailsScreen> {
         (res['data'] is Map
             ? (res['data']['bookingId'] ?? res['data']['id'] ?? res['data']['_id'])?.toString() ?? ''
             : '');
-    final razorpayOrderId = res['razorpayOrderId']?.toString() ??
-        res['orderId']?.toString() ??
-        res['order_id']?.toString() ??
-        res['razorpay_order_id']?.toString() ??
-        (res['data'] is Map
-            ? (res['data']['razorpayOrderId'] ??
-                    res['data']['orderId'] ??
-                    res['data']['order_id'] ??
-                    res['data']['razorpay_order_id'])
-                ?.toString() ??
-                ''
-            : '');
+
+    final boardingPin = res['boardingPin']?.toString() ??
+        res['otp']?.toString() ??
+        (res['data'] is Map ? (res['data']['boardingPin'] ?? res['data']['otp'])?.toString() ?? '' : '');
 
     final finalSession = session.copyWith(
       rideId: rideId,
       bookingId: bookingId,
-      razorpayOrderId: razorpayOrderId,
+      boardingPin: boardingPin.isNotEmpty ? boardingPin : session.boardingPin,
       passengerName: fullName,
       passengerPhone: '+91 $phone',
       passengerEmail: email,
       seatsCount: _seatsCount,
       totalAmount: totalFare,
+      paymentMethod: 'PAY_TO_DRIVER',
     );
 
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => PaymentMethodScreen(
-          totalAmount: totalFare,
-          rideSession: finalSession,
+        builder: (context) => RideAwaitingConfirmationScreen(
+          session: finalSession,
+          bookingId: bookingId,
         ),
       ),
     );
@@ -387,7 +379,90 @@ class _PassengerDetailsScreenState extends State<PassengerDetailsScreen> {
                           ),
                         ),
 
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 20),
+
+                        // Driver Preferences & Luggage Policy Card
+                        Builder(
+                          builder: (context) {
+                            final prefs = session.driver.preferences;
+                            return Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF9F9FB),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.shield_outlined, size: 16, color: AppColors.primary),
+                                      const SizedBox(width: 8),
+                                      const Text(
+                                        'Driver Policy & Luggage',
+                                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                                      ),
+                                      const Spacer(),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: prefs.autoApproval ? const Color(0xFFE8F5E9) : const Color(0xFFFFF8E1),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          prefs.autoApproval ? 'Auto Confirm' : 'Manual Approval',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: prefs.autoApproval ? const Color(0xFF2E7D32) : const Color(0xFFE65100),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.luggage_outlined, size: 14, color: AppColors.textSecondary),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          'Luggage Limit: Max ${prefs.luggageCount} Large & ${prefs.mediumBagCount} Medium bag(s) per seat.',
+                                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (prefs.driverPreferences.isNotEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 6,
+                                      runSpacing: 4,
+                                      children: [
+                                        for (final rule in prefs.driverPreferences)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(color: const Color(0xFFE0E0E0)),
+                                            ),
+                                            child: Text(
+                                              '• $rule',
+                                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+
+                        const SizedBox(height: 20),
 
                         Container(
                           padding: const EdgeInsets.all(16),
@@ -430,9 +505,9 @@ class _PassengerDetailsScreenState extends State<PassengerDetailsScreen> {
                 Padding(
                   padding: const EdgeInsets.all(20.0),
                   child: CustomButton(
-                    text: 'Proceed to Payment',
+                    text: 'Book Ride',
                     isLoading: _isSubmitting,
-                    onPressed: _isSubmitting ? null : () => _handleProceedToPayment(session, totalFare),
+                    onPressed: _isSubmitting ? null : () => _handleBookRide(session, totalFare),
                   ),
                 ),
               ],

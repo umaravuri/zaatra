@@ -17,7 +17,7 @@ class HostAddPropertyStep6CommonScreen extends StatefulWidget {
   final dynamic amenities;
 
   const HostAddPropertyStep6CommonScreen({
-    Key? key,
+    super.key,
     required this.selectedCategory,
     required this.propertyName,
     required this.propertyDetails,
@@ -25,7 +25,7 @@ class HostAddPropertyStep6CommonScreen extends StatefulWidget {
     required this.formattedAddress,
     required this.description,
     required this.amenities,
-  }) : super(key: key);
+  });
 
   @override
   State<HostAddPropertyStep6CommonScreen> createState() => _HostAddPropertyStep6CommonScreenState();
@@ -33,14 +33,43 @@ class HostAddPropertyStep6CommonScreen extends StatefulWidget {
 
 class _HostAddPropertyStep6CommonScreenState extends State<HostAddPropertyStep6CommonScreen> {
   final Set<String> _selectedRules = {};
+  final List<String> _customRules = [];
+  final TextEditingController _customRuleController = TextEditingController();
 
-  final List<Map<String, dynamic>> _rules = [
+  final List<Map<String, dynamic>> _standardRules = [
     {'title': 'No Smoking', 'icon': Icons.smoke_free_rounded},
     {'title': 'No Pets', 'icon': Icons.pets_rounded},
     {'title': 'No Parties or events', 'icon': Icons.celebration_rounded},
     {'title': 'Suitable for children', 'icon': Icons.child_care_rounded},
     {'title': 'Quiet Hours (10:00 PM – 07:00 AM)', 'icon': Icons.access_time_rounded},
   ];
+
+  @override
+  void dispose() {
+    _customRuleController.dispose();
+    super.dispose();
+  }
+
+  void _addCustomRule() {
+    final text = _customRuleController.text.trim();
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a house rule.'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+    if (_selectedRules.contains(text)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This rule is already added.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+    setState(() {
+      _selectedRules.add(text);
+      _customRules.add(text);
+      _customRuleController.clear();
+    });
+  }
 
   void _navigateToStep7() {
     final cat = widget.selectedCategory.trim().toLowerCase();
@@ -133,7 +162,7 @@ class _HostAddPropertyStep6CommonScreenState extends State<HostAddPropertyStep6C
           children: [
             const Text('Add new property', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 16)),
             const SizedBox(height: 2),
-            Text('Set 6 by 9 (${widget.selectedCategory})', style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
+            Text('Step 6 of 9 (${widget.selectedCategory})', style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
           ],
         ),
         centerTitle: true,
@@ -171,7 +200,8 @@ class _HostAddPropertyStep6CommonScreenState extends State<HostAddPropertyStep6C
                         Text('Set house rules for your ${widget.selectedCategory.toLowerCase()} guests', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                         const SizedBox(height: 20),
 
-                        ..._rules.map((rule) {
+                        // Standard House Rules List
+                        ..._standardRules.map((rule) {
                           final title = rule['title'] as String;
                           final isSelected = _selectedRules.contains(title);
 
@@ -192,7 +222,7 @@ class _HostAddPropertyStep6CommonScreenState extends State<HostAddPropertyStep6C
                                 color: isSelected ? const Color(0xFFF9F9FB) : Colors.white,
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                  color: isSelected ? AppColors.primary.withOpacity(0.4) : AppColors.border,
+                                  color: isSelected ? AppColors.primary.withValues(alpha: 0.4) : AppColors.border,
                                   width: isSelected ? 1.5 : 1,
                                 ),
                               ),
@@ -222,7 +252,134 @@ class _HostAddPropertyStep6CommonScreenState extends State<HostAddPropertyStep6C
                               ),
                             ),
                           );
-                        }).toList(),
+                        }),
+
+                        // Custom Rules List (if any added)
+                        if (_customRules.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          const Text('Custom Added Rules', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                          const SizedBox(height: 10),
+                          ..._customRules.map((customRule) {
+                            final isSelected = _selectedRules.contains(customRule);
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: isSelected ? const Color(0xFFF9F9FB) : Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: isSelected ? AppColors.primary.withValues(alpha: 0.4) : AppColors.border,
+                                  width: isSelected ? 1.5 : 1,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF3EDF7),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Icon(Icons.rule_rounded, color: AppColors.primary, size: 20),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Text(
+                                      customRule,
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
+                                    onPressed: () {
+                                      setState(() {
+                                        _selectedRules.remove(customRule);
+                                        _customRules.remove(customRule);
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
+
+                        const SizedBox(height: 16),
+
+                        // Add Custom Rule Card Section
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFBF9FD),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: const Color(0xFFE8DEF8)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(Icons.add_circle_outline_rounded, color: AppColors.primary, size: 20),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Add Custom House Rule',
+                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Specify any special guidelines or rules for your property',
+                                style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _customRuleController,
+                                      decoration: InputDecoration(
+                                        hintText: 'e.g. No footwear inside, Valid Gov ID required',
+                                        hintStyle: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          borderSide: const BorderSide(color: Color(0xFFE8DEF8)),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          borderSide: const BorderSide(color: Color(0xFFE8DEF8)),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                                        ),
+                                      ),
+                                      onSubmitted: (_) => _addCustomRule(),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary,
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                    onPressed: _addCustomRule,
+                                    child: const Text('+ Add Rule', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
                       ],
                     ),
                   ),

@@ -18,8 +18,9 @@ class HostAddVillaStep2DetailsScreen extends StatefulWidget {
 
 class _HostAddVillaStep2DetailsScreenState extends State<HostAddVillaStep2DetailsScreen> {
   final TextEditingController _nameController = TextEditingController();
-  int _bedrooms = 0;
-  int _bathrooms = 0;
+  int _villas = 1;
+  int _bedrooms = 1;
+  int _bathrooms = 1;
 
   @override
   Widget build(BuildContext context) {
@@ -102,12 +103,16 @@ class _HostAddVillaStep2DetailsScreenState extends State<HostAddVillaStep2Detail
                         ),
                         const SizedBox(height: 20),
 
+                        // Villas Counter
+                        _buildCounterRow('No:of Villas', _villas, (val) => setState(() => _villas = val)),
+                        const SizedBox(height: 16),
+
                         // Bedrooms Counter
-                        _buildCounterRow('No:of Bed rooms', _bedrooms, (val) => setState(() => _bedrooms = val)),
+                        _buildCounterRow('No:of Bed rooms / Villa', _bedrooms, (val) => setState(() => _bedrooms = val)),
                         const SizedBox(height: 16),
 
                         // Bathrooms Counter
-                        _buildCounterRow('No:of Bath rooms', _bathrooms, (val) => setState(() => _bathrooms = val)),
+                        _buildCounterRow('No:of Bath rooms / Villa', _bathrooms, (val) => setState(() => _bathrooms = val)),
                       ],
                     ),
                   ),
@@ -125,6 +130,12 @@ class _HostAddVillaStep2DetailsScreenState extends State<HostAddVillaStep2Detail
                         );
                         return;
                       }
+                      if (_villas <= 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter at least 1 villa.'), backgroundColor: Colors.red),
+                        );
+                        return;
+                      }
                       if (_bedrooms <= 0) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Please enter at least 1 bedroom.'), backgroundColor: Colors.red),
@@ -136,6 +147,7 @@ class _HostAddVillaStep2DetailsScreenState extends State<HostAddVillaStep2Detail
                         MaterialPageRoute(
                           builder: (context) => HostAddVillaStep3AddressScreen(
                             villaName: _nameController.text.trim(),
+                            totalVillas: _villas,
                             bedrooms: _bedrooms,
                             bathrooms: _bathrooms,
                             selectedCategory: widget.selectedCategory,

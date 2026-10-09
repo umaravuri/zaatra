@@ -103,23 +103,49 @@ class HostService {
             ? '${address['streetRoad'] ?? ''}, ${address['city'] ?? ''}, ${address['state'] ?? ''}'
             : 'Road No 2, Child Park Street, Hyderabad, Telangana');
 
+    final effectivePropertyDetails = propertyDetails != null
+        ? Map<String, dynamic>.from(propertyDetails)
+        : <String, dynamic>{
+            'singleSharingRegularRooms': 1,
+            'singleSharingLuxuryRooms': 1,
+            'doubleSharingRegularRooms': 1,
+            'doubleSharingLuxuryRooms': 1,
+            'bedrooms': bedrooms,
+            'bathrooms': bathrooms,
+            'guests': guests,
+          };
+
+    final effectiveBedrooms = (effectivePropertyDetails['bedrooms'] is int)
+        ? effectivePropertyDetails['bedrooms'] as int
+        : bedrooms;
+    final effectiveBathrooms = (effectivePropertyDetails['bathrooms'] is int)
+        ? effectivePropertyDetails['bathrooms'] as int
+        : bathrooms;
+    final effectiveGuests = (effectivePropertyDetails['guests'] is int)
+        ? effectivePropertyDetails['guests'] as int
+        : (effectivePropertyDetails['overnightCapacity'] is int
+            ? effectivePropertyDetails['overnightCapacity'] as int
+            : guests);
+
     final Map<String, dynamic> body = {
       'propertyType': resolvedType,
       'propertyName': resolvedTitle,
       'title': resolvedTitle,
       'type': resolvedType,
-      'propertyDetails': propertyDetails ?? {
-        'singleSharingRegularRooms': 1,
-        'singleSharingLuxuryRooms': 1,
-        'doubleSharingRegularRooms': 1,
-        'doubleSharingLuxuryRooms': 1,
-        'bedrooms': bedrooms,
-        'bathrooms': bathrooms,
-        'guests': guests,
-      },
-      'bedrooms': bedrooms,
-      'bathrooms': bathrooms,
-      'guests': guests,
+      'propertyDetails': effectivePropertyDetails,
+      'bedrooms': effectiveBedrooms,
+      'bathrooms': effectiveBathrooms,
+      'guests': effectiveGuests,
+      if (effectivePropertyDetails.containsKey('totalVillas'))
+        'totalVillas': effectivePropertyDetails['totalVillas'],
+      if (effectivePropertyDetails.containsKey('farmArea'))
+        'farmArea': effectivePropertyDetails['farmArea'],
+      if (effectivePropertyDetails.containsKey('dayEventCapacity'))
+        'dayEventCapacity': effectivePropertyDetails['dayEventCapacity'],
+      if (effectivePropertyDetails.containsKey('parkingCapacity'))
+        'parkingCapacity': effectivePropertyDetails['parkingCapacity'],
+      if (effectivePropertyDetails.containsKey('vehicleParkingCapacity'))
+        'vehicleParkingCapacity': effectivePropertyDetails['vehicleParkingCapacity'],
       'address': address ?? {
         'doorFlatNo': 'D.No 4-56/A',
         'streetRoad': 'Road No 2, Child Park Street',
@@ -300,7 +326,7 @@ class HostService {
         return false;
       }).toList();
 
-      return matched.isNotEmpty ? matched : allFetched;
+      return matched;
     } catch (_) {
       return [];
     }
@@ -318,29 +344,32 @@ class HostService {
     final cleanPhone = phoneToCheck.replaceAll(RegExp(r'[^0-9]'), '');
     final tenDigit = cleanPhone.length >= 10 ? cleanPhone.substring(cleanPhone.length - 10) : cleanPhone;
 
-    // 1. Check User-Level Admin Approval (from provided profile or SharedPreferences session)
+    // 1. Check User-Level Admin Approval (only applicable if user's registered role is host)
     final user = userProfile ?? await AuthService.getCurrentUser();
     if (user != null) {
-      final userStatus = (user['status'] ?? '').toString().toLowerCase();
-      final hostStatus = (user['hostStatus'] ?? user['hostApproval'] ?? user['kyc'] ?? user['kycStatus'] ?? '').toString().toLowerCase();
-      final isUserApproved = user['isApproved'] == true ||
-          user['adminApproval'] == true ||
-          userStatus == 'approved' ||
-          userStatus == 'active' ||
-          hostStatus == 'approved' ||
-          hostStatus == 'active' ||
-          hostStatus == 'verified';
+      final userRole = (user['role'] ?? '').toString().toLowerCase();
+      if (userRole == 'host') {
+        final userStatus = (user['status'] ?? '').toString().toLowerCase();
+        final hostStatus = (user['hostStatus'] ?? user['hostApproval'] ?? user['kyc'] ?? user['kycStatus'] ?? '').toString().toLowerCase();
+        final isUserApproved = user['isApproved'] == true ||
+            user['adminApproval'] == true ||
+            userStatus == 'approved' ||
+            userStatus == 'active' ||
+            hostStatus == 'approved' ||
+            hostStatus == 'active' ||
+            hostStatus == 'verified';
 
-      if (isUserApproved) {
-        if (cleanPhone.isNotEmpty) {
-          await prefs.setBool('host_approved_$cleanPhone', true);
+        if (isUserApproved) {
+          if (cleanPhone.isNotEmpty) {
+            await prefs.setBool('host_approved_$cleanPhone', true);
+          }
+          final properties = await getHostProperties(hostId: hostId, hostPhone: phoneToCheck);
+          return HostApprovalResult(
+            status: HostApprovalStatus.approved,
+            properties: properties,
+            approvedProperties: properties,
+          );
         }
-        final properties = await getHostProperties(hostId: hostId, hostPhone: phoneToCheck);
-        return HostApprovalResult(
-          status: HostApprovalStatus.approved,
-          properties: properties,
-          approvedProperties: properties,
-        );
       }
     }
 
@@ -407,6 +436,39 @@ class HostService {
       status: HostApprovalStatus.pendingApproval,
       properties: properties,
     );
+  }
+
+  // 5. Update Property Details / Partial Schema by ID
+  // Endpoint: PUT /properties/:id
+  static Future<Map<String, dynamic>> updateProperty(
+    String propertyId,
+    Map<String, dynamic> updateData, {
+    String? token,
+  }) async {
+    final cleanId = propertyId.trim();
+    if (cleanId.isEmpty) {
+      return {
+        'success': false,
+        'message': 'Property ID is required for update',
+      };
+    }
+    return await ApiService.put('/properties/$cleanId', updateData, token: token);
+  }
+
+  // 6. Get Single Property Details by ID
+  // Endpoint: GET /properties/:id
+  static Future<Map<String, dynamic>> getPropertyById(
+    String propertyId, {
+    String? token,
+  }) async {
+    final cleanId = propertyId.trim();
+    if (cleanId.isEmpty) {
+      return {
+        'success': false,
+        'message': 'Property ID is required',
+      };
+    }
+    return await ApiService.get('/properties/$cleanId', token: token);
   }
 }
 

@@ -7,6 +7,7 @@ import 'host_add_villa_step4_description_screen.dart';
 
 class HostAddVillaStep3AddressScreen extends StatefulWidget {
   final String villaName;
+  final int totalVillas;
   final int bedrooms;
   final int bathrooms;
   final String selectedCategory;
@@ -14,6 +15,7 @@ class HostAddVillaStep3AddressScreen extends StatefulWidget {
   const HostAddVillaStep3AddressScreen({
     Key? key,
     required this.villaName,
+    this.totalVillas = 1,
     required this.bedrooms,
     required this.bathrooms,
     this.selectedCategory = 'Villa',
@@ -392,6 +394,7 @@ class _HostAddVillaStep3AddressScreenState extends State<HostAddVillaStep3Addres
                               MaterialPageRoute(
                                 builder: (context) => HostAddVillaStep4DescriptionScreen(
                                   villaName: widget.villaName,
+                                  totalVillas: widget.totalVillas,
                                   bedrooms: widget.bedrooms,
                                   bathrooms: widget.bathrooms,
                                   formattedAddress: _formattedAddress,

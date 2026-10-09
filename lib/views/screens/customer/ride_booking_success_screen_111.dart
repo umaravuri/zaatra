@@ -1,24 +1,82 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../models/ride_booking_model.dart';
+import '../../../services/ride_service.dart';
 import '../../widgets/custom_button.dart';
 import 'customer_home_screen_38.dart';
 import 'live_ride_tracking_screen_106.dart';
 import 'ride_confirmed_detail_screen_112.dart';
 
-class RideBookingSuccessScreen extends StatelessWidget {
+class RideBookingSuccessScreen extends StatefulWidget {
   final RideBookingSession? session;
+  final String? bookingId;
+  final RideConfirmationModal? confirmationModal;
 
   const RideBookingSuccessScreen({
     super.key,
     this.session,
+    this.bookingId,
+    this.confirmationModal,
   });
 
-  RideBookingSession get _activeSession => session ?? const RideBookingSession();
+  @override
+  State<RideBookingSuccessScreen> createState() => _RideBookingSuccessScreenState();
+}
+
+class _RideBookingSuccessScreenState extends State<RideBookingSuccessScreen> {
+  RideConfirmationModal? _modal;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _modal = widget.confirmationModal;
+    if (_modal == null) {
+      _fetchConfirmationModal();
+    }
+  }
+
+  Future<void> _fetchConfirmationModal() async {
+    final effectiveId = widget.bookingId ?? widget.session?.bookingId ?? '';
+    if (effectiveId.isEmpty) return;
+
+    setState(() => _isLoading = true);
+    final res = await RideService.getRideConfirmation(effectiveId);
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        if (res['success'] == true) {
+          _modal = RideConfirmationModal.fromJson(res);
+        }
+      });
+    }
+  }
+
+  RideBookingSession get _activeSession => widget.session ?? const RideBookingSession();
 
   @override
   Widget build(BuildContext context) {
     final active = _activeSession;
+    final m = _modal;
+
+    final title = m?.title.isNotEmpty == true ? m!.title : 'Ride Accepted & Confirmed!';
+    final subtitle = m?.subtitle.isNotEmpty == true
+        ? m!.subtitle
+        : 'Your ride with ${active.driver.name.isNotEmpty ? active.driver.name : (m?.driverName.isNotEmpty == true ? m!.driverName : "the driver")} has\nbeen accepted and confirmed successfully';
+    
+    final pin = m?.boardingPin.isNotEmpty == true
+        ? m!.boardingPin
+        : (active.boardingPin.isNotEmpty ? active.boardingPin : '5478');
+    
+    final carPlate = m?.carAndPlate.isNotEmpty == true
+        ? m!.carAndPlate
+        : '${active.driver.carModel.isNotEmpty ? active.driver.carModel : (m?.vehicle.isNotEmpty == true ? m!.vehicle : "Sedan")} • ${active.driver.vehicleNumber.isNotEmpty ? active.driver.vehicleNumber : (m?.vehicleNumberPlate.isNotEmpty == true ? m!.vehicleNumberPlate : "AP 07GR4567")}';
+    
+    final payAmount = m?.payToDriver.isNotEmpty == true
+        ? m!.payToDriver
+        : (active.totalAmount > 0
+            ? '₹${active.totalAmount.toStringAsFixed(0)} (Cash/UPI)'
+            : (m?.amountFormatted.isNotEmpty == true ? '${m!.amountFormatted} (Cash/UPI)' : 'Cash/UPI'));
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -40,6 +98,17 @@ class RideBookingSuccessScreen extends StatelessWidget {
                 ),
               ),
             ),
+            if (_isLoading)
+              const Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: LinearProgressIndicator(
+                  color: AppColors.primary,
+                  backgroundColor: Color(0xFFF3EDF7),
+                  minHeight: 3,
+                ),
+              ),
             LayoutBuilder(
               builder: (context, constraints) {
                 return SingleChildScrollView(
@@ -54,7 +123,7 @@ class RideBookingSuccessScreen extends StatelessWidget {
                             const Spacer(),
                             const SizedBox(height: 16),
 
-                            // Celebration Checkmark Circle matching 111.png
+                            // Celebration Checkmark Circle matching Screen 111
                             Container(
                               width: 120,
                               height: 120,
@@ -69,11 +138,11 @@ class RideBookingSuccessScreen extends StatelessWidget {
 
                             const SizedBox(height: 28),
 
-                            // Title Header matching 111.png
-                            const Text(
-                              'Booking Confirmed!',
+                            // Title Header matching Screen 111
+                            Text(
+                              title,
                               textAlign: TextAlign.center,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.textPrimary,
@@ -83,7 +152,7 @@ class RideBookingSuccessScreen extends StatelessWidget {
                             const SizedBox(height: 10),
 
                             Text(
-                              'Your ride with ${active.driver.name} has\nbeen booked successfully',
+                              subtitle,
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                 fontSize: 15,
@@ -107,10 +176,10 @@ class RideBookingSuccessScreen extends StatelessWidget {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      const Flexible(
+                                      Flexible(
                                         child: Text(
-                                          'Boarding 4-Digit PIN:',
-                                          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                                          m?.pinLabel.isNotEmpty == true ? m!.pinLabel : 'Boarding 4-Digit PIN:',
+                                          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
@@ -122,7 +191,7 @@ class RideBookingSuccessScreen extends StatelessWidget {
                                           borderRadius: BorderRadius.circular(8),
                                         ),
                                         child: Text(
-                                          active.boardingPin,
+                                          pin,
                                           style: const TextStyle(
                                             fontSize: 15,
                                             fontWeight: FontWeight.bold,
@@ -139,17 +208,17 @@ class RideBookingSuccessScreen extends StatelessWidget {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      const Flexible(
+                                      Flexible(
                                         child: Text(
-                                          'Car & Plate:',
-                                          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                                          m?.carAndPlateLabel.isNotEmpty == true ? m!.carAndPlateLabel : 'Car & Plate:',
+                                          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                       const SizedBox(width: 8),
                                       Flexible(
                                         child: Text(
-                                          active.driver.vehicleNumber,
+                                          carPlate,
                                           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                                           overflow: TextOverflow.ellipsis,
                                           textAlign: TextAlign.end,
@@ -157,20 +226,20 @@ class RideBookingSuccessScreen extends StatelessWidget {
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 6),
+                                  const SizedBox(height: 8),
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      const Flexible(
+                                      Flexible(
                                         child: Text(
-                                          'Amount Paid:',
-                                          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                                          m?.payToDriverLabel.isNotEmpty == true ? m!.payToDriverLabel : 'Pay to Driver:',
+                                          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                       const SizedBox(width: 8),
                                       Text(
-                                        '₹${active.totalAmount.toStringAsFixed(0)}',
+                                        payAmount,
                                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF2E7D32)),
                                       ),
                                     ],
@@ -182,14 +251,17 @@ class RideBookingSuccessScreen extends StatelessWidget {
                             const Spacer(),
                             const SizedBox(height: 16),
 
-                            // Primary CTA: View Confirmed Ride Details (Screen 112)
+                            // Primary CTA: View Trip Details (Screen 112)
                             CustomButton(
-                              text: 'View Ride Confirmation',
+                              text: 'View Trip Details',
                               onPressed: () {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => RideConfirmedDetailScreen112(session: active),
+                                    builder: (context) => RideConfirmedDetailScreen112(
+                                      session: active,
+                                      bookingId: widget.bookingId ?? active.bookingId,
+                                    ),
                                   ),
                                 );
                               },
@@ -197,22 +269,31 @@ class RideBookingSuccessScreen extends StatelessWidget {
 
                             const SizedBox(height: 10),
 
-                            // Secondary CTA: View Live Tracking
+                            // Secondary CTA: Show Route Map (Screen 106)
                             OutlinedButton(
                               onPressed: () {
                                 Navigator.push(
                                   context,
-                                  MaterialPageRoute(builder: (context) => const LiveRideTrackingScreen()),
+                                  MaterialPageRoute(
+                                    builder: (context) => LiveRideTrackingScreen(session: active),
+                                  ),
                                 );
                               },
                               style: OutlinedButton.styleFrom(
                                 minimumSize: const Size(double.infinity, 50),
-                                side: const BorderSide(color: AppColors.primary),
+                                side: const BorderSide(color: AppColors.primary, width: 1.5),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               ),
-                              child: const Text(
-                                'View Live Tracking',
-                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.primary),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.map_rounded, color: AppColors.primary, size: 20),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Show Route Map',
+                                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                  ),
+                                ],
                               ),
                             ),
 

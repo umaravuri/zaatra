@@ -5,7 +5,7 @@ import 'host_add_property_step6_81.dart';
 
 class HostAddPropertyStep5Screen extends StatefulWidget {
   final Map<String, dynamic>? propertyData;
-  const HostAddPropertyStep5Screen({Key? key, this.propertyData}) : super(key: key);
+  const HostAddPropertyStep5Screen({super.key, this.propertyData});
 
   @override
   State<HostAddPropertyStep5Screen> createState() => _HostAddPropertyStep5ScreenState();
@@ -15,6 +15,8 @@ class _HostAddPropertyStep5ScreenState extends State<HostAddPropertyStep5Screen>
   // Separate selections for Luxury and Regular rooms matching the user wireframe
   final Set<String> _luxuryAmenities = {};
   final Set<String> _regularAmenities = {};
+  final TextEditingController _customAmenityController = TextEditingController();
+  String _customTarget = 'Both'; // 'Both', 'Luxury', 'Regular'
 
   final List<Map<String, dynamic>> _amenitiesList = [
     {'title': 'Wi-Fi', 'icon': Icons.wifi_rounded},
@@ -32,6 +34,31 @@ class _HostAddPropertyStep5ScreenState extends State<HostAddPropertyStep5Screen>
   ];
 
   @override
+  void dispose() {
+    _customAmenityController.dispose();
+    super.dispose();
+  }
+
+  void _addCustomAmenity() {
+    final text = _customAmenityController.text.trim();
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter an amenity name.'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+    setState(() {
+      if (_customTarget == 'Luxury' || _customTarget == 'Both') {
+        _luxuryAmenities.add(text);
+      }
+      if (_customTarget == 'Regular' || _customTarget == 'Both') {
+        _regularAmenities.add(text);
+      }
+      _customAmenityController.clear();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
@@ -40,11 +67,11 @@ class _HostAddPropertyStep5ScreenState extends State<HostAddPropertyStep5Screen>
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Column(
-          children: const [
+        title: const Column(
+          children: [
             Text('Add new property', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 16)),
             SizedBox(height: 2),
-            Text('Set 5 by 9', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+            Text('Step 5 of 9', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
           ],
         ),
         centerTitle: true,
@@ -75,7 +102,7 @@ class _HostAddPropertyStep5ScreenState extends State<HostAddPropertyStep5Screen>
 
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(20.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -85,9 +112,7 @@ class _HostAddPropertyStep5ScreenState extends State<HostAddPropertyStep5Screen>
 
                         const SizedBox(height: 22),
 
-                        // ==========================================
                         // 1. LUXURY ROOM AMENITIES LIST SECTION
-                        // ==========================================
                         _buildSectionHeader(
                           title: 'Amenities in Luxury Rooms',
                           subtitle: 'Select all amenities provided in Luxury Rooms',
@@ -117,13 +142,9 @@ class _HostAddPropertyStep5ScreenState extends State<HostAddPropertyStep5Screen>
                           onRemove: (item) => setState(() => _luxuryAmenities.remove(item)),
                         ),
 
-                        const SizedBox(height: 28),
-                        const Divider(height: 1, color: Color(0xFFE8DEF8)),
                         const SizedBox(height: 24),
 
-                        // ==========================================
                         // 3. REGULAR ROOM AMENITIES LIST SECTION
-                        // ==========================================
                         _buildSectionHeader(
                           title: 'Amenities in Regular Rooms',
                           subtitle: 'Select all amenities provided in Regular Rooms',
@@ -151,6 +172,101 @@ class _HostAddPropertyStep5ScreenState extends State<HostAddPropertyStep5Screen>
                           title: 'Selected Amenities (Regular)',
                           selectedSet: _regularAmenities,
                           onRemove: (item) => setState(() => _regularAmenities.remove(item)),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // 5. ADD CUSTOM AMENITY SECTION
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFBF9FD),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: const Color(0xFFE8DEF8)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(Icons.add_circle_outline_rounded, color: AppColors.primary, size: 20),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Add Custom Amenity',
+                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Add extra amenities not listed above and assign them',
+                                style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _customAmenityController,
+                                      style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
+                                      decoration: InputDecoration(
+                                        hintText: 'e.g. EV Charger, Sound System',
+                                        hintStyle: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          borderSide: const BorderSide(color: Color(0xFFE8DEF8)),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          borderSide: const BorderSide(color: Color(0xFFE8DEF8)),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                                        ),
+                                      ),
+                                      onSubmitted: (_) => _addCustomAmenity(),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                    onPressed: _addCustomAmenity,
+                                    child: const Text('+ Add', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  const Text('Assign to: ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                                  const SizedBox(width: 8),
+                                  ...['Both', 'Luxury', 'Regular'].map((target) {
+                                    final isSelected = _customTarget == target;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: 8.0),
+                                      child: ChoiceChip(
+                                        label: Text(target, style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : AppColors.textPrimary)),
+                                        selected: isSelected,
+                                        selectedColor: AppColors.primary,
+                                        backgroundColor: const Color(0xFFF3EDF7),
+                                        onSelected: (_) => setState(() => _customTarget = target),
+                                      ),
+                                    );
+                                  }),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
 
                         const SizedBox(height: 20),
@@ -212,11 +328,12 @@ class _HostAddPropertyStep5ScreenState extends State<HostAddPropertyStep5Screen>
 
   Widget _buildSectionHeader({required String title, required String subtitle, required IconData icon}) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
+            color: AppColors.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, color: AppColors.primary, size: 20),
@@ -240,65 +357,63 @@ class _HostAddPropertyStep5ScreenState extends State<HostAddPropertyStep5Screen>
     required Set<String> selectedSet,
     required ValueChanged<String> onToggle,
   }) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 1.6,
-      ),
-      itemCount: _amenitiesList.length,
-      itemBuilder: (context, index) {
-        final item = _amenitiesList[index];
-        final title = item['title'] as String;
-        final isSelected = selectedSet.contains(title);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final itemWidth = (constraints.maxWidth - 10) / 2;
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: _amenitiesList.map((item) {
+            final title = item['title'] as String;
+            final isSelected = selectedSet.contains(title);
 
-        return GestureDetector(
-          onTap: () => onToggle(title),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFFF3EDF7) : Colors.white,
+            return InkWell(
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isSelected ? AppColors.primary : AppColors.border,
-                width: isSelected ? 1.5 : 1,
-              ),
-              boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: AppColors.primary.withOpacity(0.12),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      )
-                    ]
-                  : [],
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  item['icon'] as IconData,
-                  color: isSelected ? AppColors.primary : AppColors.textSecondary,
-                  size: 18,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                      color: isSelected ? AppColors.primary : AppColors.textPrimary,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+              onTap: () => onToggle(title),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                width: itemWidth,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                decoration: BoxDecoration(
+                  color: isSelected ? const Color(0xFFF3EDF7) : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected ? AppColors.primary : AppColors.border,
+                    width: isSelected ? 1.6 : 1.0,
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isSelected ? AppColors.primary.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+                child: Row(
+                  children: [
+                    Icon(
+                      item['icon'] as IconData,
+                      color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                          color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
         );
       },
     );
@@ -309,6 +424,8 @@ class _HostAddPropertyStep5ScreenState extends State<HostAddPropertyStep5Screen>
     required Set<String> selectedSet,
     required ValueChanged<String> onRemove,
   }) {
+    if (selectedSet.isEmpty) return const SizedBox.shrink();
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -325,40 +442,34 @@ class _HostAddPropertyStep5ScreenState extends State<HostAddPropertyStep5Screen>
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
           ),
           const SizedBox(height: 10),
-          if (selectedSet.isEmpty)
-            const Text(
-              'No amenities selected yet.',
-              style: TextStyle(fontSize: 12, color: AppColors.textMuted, fontStyle: FontStyle.italic),
-            )
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: selectedSet.map((item) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF3EDF7),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.primary.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        item,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
-                      ),
-                      const SizedBox(width: 6),
-                      GestureDetector(
-                        onTap: () => onRemove(item),
-                        child: const Icon(Icons.close_rounded, size: 14, color: AppColors.primary),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: selectedSet.map((item) {
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3EDF7),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      item,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: () => onRemove(item),
+                      child: const Icon(Icons.close_rounded, size: 14, color: AppColors.primary),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
         ],
       ),
     );

@@ -493,30 +493,116 @@ class _TripPreparationDriversScreenState extends State<TripPreparationDriversScr
 
                                     const SizedBox(height: 14),
 
-                                    // Dynamic seat indicator
+                                    // Dynamic seat indicator & Instant Approval Badge
                                     Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        Container(
-                                          padding: const EdgeInsets.all(5),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFE8F5E9),
-                                            border: Border.all(color: const Color(0xFF4CAF50), width: 1),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: const Icon(Icons.event_seat_rounded, size: 15, color: Color(0xFF2E7D32)),
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(5),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFE8F5E9),
+                                                border: Border.all(color: const Color(0xFF4CAF50), width: 1),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: const Icon(Icons.event_seat_rounded, size: 15, color: Color(0xFF2E7D32)),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              driver.seatsAvailable > 0
+                                                  ? '${driver.seatsAvailable} ${driver.seatsAvailable == 1 ? "seat" : "seats"} available'
+                                                  : 'Seats info on booking',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: driver.seatsAvailable > 0 ? const Color(0xFF2E7D32) : AppColors.textSecondary,
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          driver.seatsAvailable > 0
-                                              ? '${driver.seatsAvailable} ${driver.seatsAvailable == 1 ? "seat" : "seats"} available'
-                                              : 'Seats info available on booking',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                            color: driver.seatsAvailable > 0 ? const Color(0xFF2E7D32) : AppColors.textSecondary,
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: driver.preferences.autoApproval
+                                                ? const Color(0xFFE8F5E9)
+                                                : const Color(0xFFFFF8E1),
+                                            borderRadius: BorderRadius.circular(10),
+                                            border: Border.all(
+                                              color: driver.preferences.autoApproval
+                                                  ? const Color(0xFF81C784)
+                                                  : const Color(0xFFFFD54F),
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                driver.preferences.autoApproval
+                                                    ? Icons.bolt_rounded
+                                                    : Icons.hourglass_top_rounded,
+                                                size: 13,
+                                                color: driver.preferences.autoApproval
+                                                    ? const Color(0xFF2E7D32)
+                                                    : const Color(0xFFF57F17),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                driver.preferences.autoApproval
+                                                    ? 'Instant'
+                                                    : 'Approval req.',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: driver.preferences.autoApproval
+                                                      ? const Color(0xFF2E7D32)
+                                                      : const Color(0xFFF57F17),
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       ],
+                                    ),
+
+                                    // Amenities & Preferences Pills
+                                    Builder(
+                                      builder: (context) {
+                                        final prefs = driver.preferences;
+                                        final pills = <Widget>[];
+
+                                        if (prefs.wifi) {
+                                          pills.add(_buildCardPill(Icons.wifi_rounded, 'WiFi'));
+                                        }
+                                        if (prefs.usbCharging) {
+                                          pills.add(_buildCardPill(Icons.power_rounded, 'USB'));
+                                        }
+                                        pills.add(_buildCardPill(
+                                          Icons.luggage_outlined,
+                                          '${prefs.luggageCount}L, ${prefs.mediumBagCount}M Bag',
+                                        ));
+
+                                        for (final f in prefs.rideFeatures.take(2)) {
+                                          if (f != 'Free WiFi' && f != 'USB Charging') {
+                                            pills.add(_buildCardPill(Icons.check_circle_outline_rounded, f));
+                                          }
+                                        }
+
+                                        for (final dp in prefs.driverPreferences.take(2)) {
+                                          pills.add(_buildCardPill(Icons.info_outline_rounded, dp));
+                                        }
+
+                                        if (pills.isEmpty) return const SizedBox.shrink();
+
+                                        return Padding(
+                                          padding: const EdgeInsets.only(top: 10.0),
+                                          child: Wrap(
+                                            spacing: 6,
+                                            runSpacing: 6,
+                                            children: pills,
+                                          ),
+                                        );
+                                      },
                                     ),
 
                                     const SizedBox(height: 16),
@@ -569,6 +655,32 @@ class _TripPreparationDriversScreenState extends State<TripPreparationDriversScr
           Icon(icon, size: 18, color: AppColors.textPrimary),
           const SizedBox(width: 6),
           Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCardPill(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F5F7),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE0E0E0)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: AppColors.textSecondary),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textPrimary,
+            ),
+          ),
         ],
       ),
     );

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/custom_text_field.dart';
 import 'host_add_property_step7_76.dart';
 
 class HostAddPropertyStep6Screen extends StatefulWidget {
   final Map<String, dynamic>? propertyData;
-  const HostAddPropertyStep6Screen({Key? key, this.propertyData}) : super(key: key);
+  const HostAddPropertyStep6Screen({super.key, this.propertyData});
 
   @override
   State<HostAddPropertyStep6Screen> createState() => _HostAddPropertyStep6ScreenState();
@@ -13,6 +14,7 @@ class HostAddPropertyStep6Screen extends StatefulWidget {
 
 class _HostAddPropertyStep6ScreenState extends State<HostAddPropertyStep6Screen> {
   final Set<String> _selectedRules = {};
+  final TextEditingController _customRuleController = TextEditingController();
 
   final List<Map<String, dynamic>> _rules = [
     {'title': 'No Smoking', 'icon': Icons.smoke_free_rounded},
@@ -21,6 +23,12 @@ class _HostAddPropertyStep6ScreenState extends State<HostAddPropertyStep6Screen>
     {'title': 'Suitable for children', 'icon': Icons.child_care_rounded},
     {'title': 'Quiet Hours (10:00 PM – 07:00 AM)', 'icon': Icons.access_time_rounded},
   ];
+
+  @override
+  void dispose() {
+    _customRuleController.dispose();
+    super.dispose();
+  }
 
   void _toggleRule(String title) {
     setState(() {
@@ -32,60 +40,25 @@ class _HostAddPropertyStep6ScreenState extends State<HostAddPropertyStep6Screen>
     });
   }
 
-  void _showAddCustomRuleDialog() {
-    final customRuleController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: const [
-            Icon(Icons.rule_rounded, color: AppColors.primary),
-            SizedBox(width: 10),
-            Text('Add Custom Rule', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: TextField(
-          controller: customRuleController,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: 'e.g. No shoes inside living areas',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () {
-              final newRule = customRuleController.text.trim();
-              if (newRule.isNotEmpty) {
-                setState(() {
-                  _rules.add({'title': newRule, 'icon': Icons.check_box_outlined});
-                  _selectedRules.add(newRule);
-                });
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Custom rule "$newRule" added!'),
-                    backgroundColor: AppColors.primary,
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-              }
-            },
-            child: const Text('Add Rule', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
+  void _addCustomRule() {
+    final text = _customRuleController.text.trim();
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a house rule.'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+    if (_selectedRules.contains(text)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This rule is already added.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+    setState(() {
+      _rules.add({'title': text, 'icon': Icons.rule_rounded});
+      _selectedRules.add(text);
+      _customRuleController.clear();
+    });
   }
 
   @override
@@ -97,8 +70,8 @@ class _HostAddPropertyStep6ScreenState extends State<HostAddPropertyStep6Screen>
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Column(
-          children: const [
+        title: const Column(
+          children: [
             Text('Add new property', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 16)),
             SizedBox(height: 2),
             Text('Step 6 of 9', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
@@ -139,9 +112,9 @@ class _HostAddPropertyStep6ScreenState extends State<HostAddPropertyStep6Screen>
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Column(
+                            const Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
+                              children: [
                                 Text('House Rules', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                                 SizedBox(height: 4),
                                 Text('Tap to enable or disable rules for guests', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
@@ -174,7 +147,7 @@ class _HostAddPropertyStep6ScreenState extends State<HostAddPropertyStep6Screen>
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
-                                color: isSelected ? AppColors.primary.withOpacity(0.5) : AppColors.border,
+                                color: isSelected ? AppColors.primary.withValues(alpha: 0.5) : AppColors.border,
                                 width: isSelected ? 1.5 : 1,
                               ),
                             ),
@@ -210,38 +183,69 @@ class _HostAddPropertyStep6ScreenState extends State<HostAddPropertyStep6Screen>
                           );
                         }),
 
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 12),
 
-                        // Add Custom Rule Button
-                        InkWell(
-                          onTap: _showAddCustomRuleDialog,
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF7F5FE),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: AppColors.primary.withOpacity(0.4), width: 1.5),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: const [
-                                Icon(Icons.add_circle_outline_rounded, color: AppColors.primary, size: 22),
-                                SizedBox(width: 10),
-                                Text(
-                                  '+ Add Custom Rule',
-                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary),
-                                ),
-                              ],
-                            ),
+                        // Inline Add Custom Rule Section
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFBF9FD),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: const Color(0xFFE8DEF8)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(Icons.add_circle_outline_rounded, color: AppColors.primary, size: 20),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Add Custom House Rule',
+                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Specify any special guidelines or rules for your guests',
+                                style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: CustomTextField(
+                                      label: '',
+                                      hint: 'e.g. Valid Gov ID required, No loud music',
+                                      controller: _customRuleController,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                    onPressed: _addCustomRule,
+                                    child: const Text('+ Add Rule', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
+
+                        const SizedBox(height: 20),
                       ],
                     ),
                   ),
                 ),
 
-                // Dual Buttons Row
+                // Dual Buttons Row matching 81.png
                 Padding(
                   padding: const EdgeInsets.all(20.0),
                   child: Row(
@@ -258,10 +262,11 @@ class _HostAddPropertyStep6ScreenState extends State<HostAddPropertyStep6Screen>
                       const SizedBox(width: 14),
                       Expanded(
                         child: CustomButton(
-                          text: 'Next: Pricing',
+                          text: 'Next',
                           onPressed: () {
                             final updatedData = Map<String, dynamic>.from(widget.propertyData ?? {});
                             updatedData['houseRules'] = _selectedRules.toList();
+
                             Navigator.push(
                               context,
                               MaterialPageRoute(

@@ -8,9 +8,9 @@ class HostAddFarmhouseStep2DetailsScreen extends StatefulWidget {
   final String selectedCategory;
 
   const HostAddFarmhouseStep2DetailsScreen({
-    Key? key,
+    super.key,
     this.selectedCategory = 'Farmhouse',
-  }) : super(key: key);
+  });
 
   @override
   State<HostAddFarmhouseStep2DetailsScreen> createState() => _HostAddFarmhouseStep2DetailsScreenState();
@@ -18,10 +18,24 @@ class HostAddFarmhouseStep2DetailsScreen extends StatefulWidget {
 
 class _HostAddFarmhouseStep2DetailsScreenState extends State<HostAddFarmhouseStep2DetailsScreen> {
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _areaController = TextEditingController();
-  int _bedrooms = 0;
-  int _bathrooms = 0;
-  int _eventCapacity = 0;
+  final TextEditingController _areaController = TextEditingController(text: '2.5');
+  String _selectedAreaUnit = 'Acres';
+
+  // Guest Capacities (Distinct Overnight vs Daytime Gathering)
+  int _overnightCapacity = 15;
+  int _eventCapacity = 100;
+
+  // Accommodation & Amenities
+  int _bedrooms = 3;
+  int _bathrooms = 3;
+  int _parkingCapacity = 15;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _areaController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +85,7 @@ class _HostAddFarmhouseStep2DetailsScreenState extends State<HostAddFarmhouseSte
                       children: [
                         const Text('Farmhouse Overview', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                         const SizedBox(height: 4),
-                        const Text('Enter farm acreage, party lawn capacity & bedroom details', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                        const Text('Enter farm acreage, guest capacity & accommodation details', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                         const SizedBox(height: 20),
 
                         // Selected Type Card
@@ -79,9 +93,9 @@ class _HostAddFarmhouseStep2DetailsScreenState extends State<HostAddFarmhouseSte
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.08),
+                            color: AppColors.primary.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                           ),
                           child: Row(
                             children: const [
@@ -104,24 +118,66 @@ class _HostAddFarmhouseStep2DetailsScreenState extends State<HostAddFarmhouseSte
                         ),
                         const SizedBox(height: 18),
 
-                        // Farm Area (Acres / Sq Yards)
-                        CustomTextField(
-                          label: 'Total Farm / Lawn Area',
-                          hint: 'e.g. 2.5 Acres / 3,000 Sq Yards',
-                          controller: _areaController,
-                        ),
-                        const SizedBox(height: 20),
+                        // Farm Area (Value + Unit Dropdown)
+                        _buildAreaPicker(),
+                        const SizedBox(height: 22),
 
-                        // Event / Gathering Guest Capacity
-                        _buildCounterRow('Event & Party Lawn Capacity (Guests)', _eventCapacity, (val) => setState(() => _eventCapacity = val), step: 25),
-                        const SizedBox(height: 16),
+                        // Section 1: Guest Capacity Breakdown
+                        _buildSectionLabel('Guest Capacities', 'Overnight sleeping vs daytime events'),
+                        const SizedBox(height: 12),
+
+                        // Max Overnight Stay Guests
+                        _buildCounterRow(
+                          'Max Overnight Stay Guests (Sleeping)',
+                          _overnightCapacity,
+                          (val) => setState(() => _overnightCapacity = val),
+                          step: 2,
+                          min: 1,
+                        ),
+                        const SizedBox(height: 14),
+
+                        // Event / Party Lawn Capacity
+                        _buildCounterRow(
+                          'Day Event / Party Lawn Capacity (Guests)',
+                          _eventCapacity,
+                          (val) => setState(() => _eventCapacity = val),
+                          step: 25,
+                          min: 10,
+                        ),
+                        const SizedBox(height: 22),
+
+                        // Section 2: Accommodation & Parking
+                        _buildSectionLabel('Accommodation & Parking', 'Rooms, baths & vehicle space'),
+                        const SizedBox(height: 12),
 
                         // Bedrooms Counter
-                        _buildCounterRow('No: of Bedrooms / Cottages', _bedrooms, (val) => setState(() => _bedrooms = val)),
-                        const SizedBox(height: 16),
+                        _buildCounterRow(
+                          'No: of Bedrooms / Cottages',
+                          _bedrooms,
+                          (val) => setState(() => _bedrooms = val),
+                          min: 1,
+                        ),
+                        const SizedBox(height: 14),
 
                         // Bathrooms Counter
-                        _buildCounterRow('No: of Bathrooms', _bathrooms, (val) => setState(() => _bathrooms = val)),
+                        _buildCounterRow(
+                          'No: of Bathrooms',
+                          _bathrooms,
+                          (val) => setState(() => _bathrooms = val),
+                          min: 1,
+                        ),
+                        const SizedBox(height: 14),
+
+                        // Parking Capacity
+                        _buildCounterRow(
+                          'Vehicle Parking Capacity',
+                          _parkingCapacity,
+                          (val) => setState(() => _parkingCapacity = val),
+                          step: 5,
+                          min: 2,
+                          suffix: 'Cars',
+                        ),
+                        const SizedBox(height: 10),
                       ],
                     ),
                   ),
@@ -145,12 +201,22 @@ class _HostAddFarmhouseStep2DetailsScreenState extends State<HostAddFarmhouseSte
                         );
                         return;
                       }
+
+                      final areaVal = _areaController.text.trim();
+                      final farmAreaString = areaVal.isNotEmpty ? '$areaVal $_selectedAreaUnit' : '2.5 $_selectedAreaUnit';
+
                       final details = {
-                        'farmArea': _areaController.text.trim(),
+                        'farmArea': farmAreaString,
+                        'farmAreaValue': areaVal.isNotEmpty ? areaVal : '2.5',
+                        'farmAreaUnit': _selectedAreaUnit,
+                        'overnightCapacity': _overnightCapacity,
                         'eventCapacity': _eventCapacity,
+                        'dayEventCapacity': _eventCapacity,
+                        'guests': _overnightCapacity,
                         'bedrooms': _bedrooms,
                         'bathrooms': _bathrooms,
-                        'guests': _eventCapacity,
+                        'parkingCapacity': _parkingCapacity,
+                        'vehicleParkingCapacity': '$_parkingCapacity Cars',
                       };
 
                       Navigator.push(
@@ -174,11 +240,108 @@ class _HostAddFarmhouseStep2DetailsScreenState extends State<HostAddFarmhouseSte
     );
   }
 
-  Widget _buildCounterRow(String title, int value, ValueChanged<int> onChanged, {int step = 1}) {
+  Widget _buildSectionLabel(String title, String subtitle) {
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 18,
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+            Text(subtitle, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAreaPicker() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+        const Text(
+          'Total Farm / Land Area',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: TextField(
+                  controller: _areaController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                  decoration: const InputDecoration(
+                    hintText: 'e.g. 2.5',
+                    hintStyle: TextStyle(fontSize: 14, color: AppColors.textMuted),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 2,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9F9FB),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedAreaUnit,
+                    isExpanded: true,
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.primary),
+                    items: const [
+                      DropdownMenuItem(value: 'Acres', child: Text('Acres', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+                      DropdownMenuItem(value: 'Guntas', child: Text('Guntas', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+                      DropdownMenuItem(value: 'Sq. Yards', child: Text('Sq. Yards', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+                      DropdownMenuItem(value: 'Sq. Feet', child: Text('Sq. Feet', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+                      DropdownMenuItem(value: 'Bigha', child: Text('Bigha', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setState(() => _selectedAreaUnit = val);
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCounterRow(
+    String title,
+    int value,
+    ValueChanged<int> onChanged, {
+    int step = 1,
+    int min = 1,
+    String suffix = '',
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -191,7 +354,7 @@ class _HostAddFarmhouseStep2DetailsScreenState extends State<HostAddFarmhouseSte
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               InkWell(
-                onTap: () => onChanged(value > step ? value - step : step),
+                onTap: () => onChanged(value > (min + step - 1) ? value - step : min),
                 child: Container(
                   width: 36,
                   height: 36,
@@ -203,8 +366,8 @@ class _HostAddFarmhouseStep2DetailsScreenState extends State<HostAddFarmhouseSte
                 ),
               ),
               Text(
-                value < 10 ? '0$value' : '$value',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                suffix.isEmpty ? (value < 10 ? '0$value' : '$value') : '$value $suffix',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
               ),
               InkWell(
                 onTap: () => onChanged(value + step),

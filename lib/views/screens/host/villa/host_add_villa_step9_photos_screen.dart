@@ -5,6 +5,7 @@ import 'host_add_villa_review_screen.dart';
 
 class HostAddVillaStep9PhotosScreen extends StatelessWidget {
   final String villaName;
+  final int totalVillas;
   final int bedrooms;
   final int bathrooms;
   final String formattedAddress;
@@ -18,6 +19,7 @@ class HostAddVillaStep9PhotosScreen extends StatelessWidget {
   const HostAddVillaStep9PhotosScreen({
     Key? key,
     required this.villaName,
+    this.totalVillas = 1,
     required this.bedrooms,
     required this.bathrooms,
     required this.formattedAddress,
@@ -148,6 +150,7 @@ class HostAddVillaStep9PhotosScreen extends StatelessWidget {
                               MaterialPageRoute(
                                 builder: (context) => HostAddVillaReviewScreen(
                                   villaName: villaName,
+                                  totalVillas: totalVillas,
                                   bedrooms: bedrooms,
                                   bathrooms: bathrooms,
                                   formattedAddress: formattedAddress,

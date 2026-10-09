@@ -7,7 +7,7 @@ import '../../../widgets/custom_button.dart';
 import '../../../widgets/custom_image_placeholder.dart';
 import '../host_property_submitted_thankyou_screen.dart';
 
-class HostAddPropertyReviewCommonScreen extends StatelessWidget {
+class HostAddPropertyReviewCommonScreen extends StatefulWidget {
   final String selectedCategory;
   final String propertyName;
   final Map<String, dynamic> propertyDetails;
@@ -23,7 +23,7 @@ class HostAddPropertyReviewCommonScreen extends StatelessWidget {
   final Map<String, dynamic> documents;
 
   const HostAddPropertyReviewCommonScreen({
-    Key? key,
+    super.key,
     required this.selectedCategory,
     required this.propertyName,
     required this.propertyDetails,
@@ -37,36 +37,61 @@ class HostAddPropertyReviewCommonScreen extends StatelessWidget {
     required this.checkOutTime,
     required this.photos,
     required this.documents,
-  }) : super(key: key);
+  });
+
+  @override
+  State<HostAddPropertyReviewCommonScreen> createState() => _HostAddPropertyReviewCommonScreenState();
+}
+
+class _HostAddPropertyReviewCommonScreenState extends State<HostAddPropertyReviewCommonScreen> {
+  bool _isSubmitting = false;
 
   String get _pricingDisplay {
-    final basePrice = pricing['basePricePerNight'] ?? 4500;
+    if (widget.selectedCategory == 'Resort') {
+      final cottageRate = widget.pricing['cottageRatePerNight'] ?? widget.pricing['allInclusiveCottageRate'];
+      final suiteRate = widget.pricing['luxurySuiteRatePerNight'];
+      if (cottageRate != null && suiteRate != null && (suiteRate is num && suiteRate > 0)) {
+        return '₹$cottageRate (Cottage) | ₹$suiteRate (Suite)';
+      }
+    }
+    final basePrice = widget.pricing['basePricePerNight'] ?? 4500;
     return '₹ $basePrice / night';
   }
 
   String get _detailsSummary {
-    if (selectedCategory == 'Resort') {
-      final cottages = propertyDetails['cottages'] ?? 12;
-      final capacity = propertyDetails['capacity'] ?? 60;
-      return '$cottages Cottages/Suites • Max $capacity Guests';
-    } else if (selectedCategory == 'Farmhouse') {
-      final area = propertyDetails['farmArea'] ?? '2.5 Acres';
-      final eventCap = propertyDetails['eventCapacity'] ?? 150;
-      return '$area Farm • Event Capacity $eventCap Guests';
-    } else if (selectedCategory == 'Guest House') {
-      final rooms = propertyDetails['rooms'] ?? 6;
-      return '$rooms Private Rooms • Shared Lounge';
-    } else if (selectedCategory == 'Villa') {
-      final bed = propertyDetails['bedrooms'] ?? 4;
-      final bath = propertyDetails['bathrooms'] ?? 3;
-      return '$bed Bedrooms • $bath Bathrooms';
+    if (widget.selectedCategory == 'Resort') {
+      final cottages = widget.propertyDetails['cottages'] ?? 0;
+      final suites = widget.propertyDetails['luxurySuites'] ?? 0;
+      final capacity = widget.propertyDetails['totalCapacity'] ?? widget.propertyDetails['capacity'] ?? 0;
+      final parts = <String>[];
+      if (cottages is num && cottages > 0) parts.add('$cottages Cottage(s)');
+      if (suites is num && suites > 0) parts.add('$suites Luxury Suite(s)');
+      final unitsText = parts.isNotEmpty ? parts.join(' + ') : 'Resort Units';
+      return '$unitsText • Max $capacity Guests';
+    } else if (widget.selectedCategory == 'Farmhouse') {
+      final area = widget.propertyDetails['farmArea'] ?? '2.5 Acres';
+      final overnight = widget.propertyDetails['overnightCapacity'] ?? widget.propertyDetails['guests'] ?? 15;
+      final eventCap = widget.propertyDetails['dayEventCapacity'] ?? widget.propertyDetails['eventCapacity'] ?? 100;
+      final bed = widget.propertyDetails['bedrooms'] ?? 3;
+      final parking = widget.propertyDetails['parkingCapacity'] ?? 10;
+      return '$area • $bed Bed • $overnight Stay / $eventCap Event Guests • $parking Cars';
+    } else if (widget.selectedCategory == 'Guest House') {
+      final rooms = widget.propertyDetails['rooms'] ?? 6;
+      final parking = widget.propertyDetails['parkingCapacity'] ?? 4;
+      return '$rooms Private Rooms • Shared Lounge • $parking Cars Parking';
+    } else if (widget.selectedCategory == 'Villa') {
+      final villas = widget.propertyDetails['totalVillas'] ?? widget.propertyDetails['villas'] ?? 1;
+      final bed = widget.propertyDetails['bedroomsPerVilla'] ?? widget.propertyDetails['bedrooms'] ?? 1;
+      final bath = widget.propertyDetails['bathroomsPerVilla'] ?? widget.propertyDetails['bathrooms'] ?? 1;
+      final parking = widget.propertyDetails['parkingCapacity'] ?? (villas * 2);
+      return '$villas Villa(s) • $bed Bed / Villa • $bath Bath / Villa • $parking Cars Parking';
     } else {
       return 'Multi-Room Inventory';
     }
   }
 
   IconData get _categoryIcon {
-    switch (selectedCategory.toLowerCase()) {
+    switch (widget.selectedCategory.toLowerCase()) {
       case 'resort':
         return Icons.holiday_village_rounded;
       case 'farmhouse':
@@ -84,11 +109,11 @@ class HostAddPropertyReviewCommonScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<Map<String, String>> summaryRows = [
-      {'title': '$selectedCategory Details', 'value': _detailsSummary},
-      {'title': 'Address', 'value': formattedAddress},
+      {'title': '${widget.selectedCategory} Details', 'value': _detailsSummary},
+      {'title': 'Address', 'value': widget.formattedAddress},
       {'title': 'Pricing', 'value': _pricingDisplay},
-      {'title': 'Check-in / Check-out', 'value': '$checkInTime / $checkOutTime'},
-      {'title': 'Uploaded Media', 'value': '${photos.length} Photos (JPEG/PNG) • 4 KYC Documents (PDF/PNG/JPEG)'},
+      {'title': 'Check-in / Check-out', 'value': '${widget.checkInTime} / ${widget.checkOutTime}'},
+      {'title': 'Uploaded Media', 'value': '${widget.photos.length} Photos (JPEG/PNG) • 4 KYC Documents (PDF/PNG/JPEG)'},
     ];
 
     return Scaffold(
@@ -96,10 +121,10 @@ class HostAddPropertyReviewCommonScreen extends StatelessWidget {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
-          onPressed: () => Navigator.pop(context),
+          onPressed: _isSubmitting ? null : () => Navigator.pop(context),
         ),
         title: Text(
-          'Review & Submit $selectedCategory',
+          'Review & Submit ${widget.selectedCategory}',
           style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 16),
         ),
         centerTitle: true,
@@ -131,7 +156,7 @@ class HostAddPropertyReviewCommonScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Review Your $selectedCategory Listing', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                        Text('Review Your ${widget.selectedCategory} Listing', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                         const SizedBox(height: 4),
                         const Text('Please review all details before submitting for admin verification', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                         const SizedBox(height: 20),
@@ -142,10 +167,10 @@ class HostAddPropertyReviewCommonScreen extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: AppColors.primary.withOpacity(0.35)),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.primary.withOpacity(0.06),
+                                color: AppColors.primary.withValues(alpha: 0.06),
                                 blurRadius: 10,
                                 offset: const Offset(0, 4),
                               ),
@@ -164,9 +189,9 @@ class HostAddPropertyReviewCommonScreen extends StatelessWidget {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(propertyName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                                    Text(widget.propertyName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                                     const SizedBox(height: 4),
-                                    Text('$selectedCategory • $_detailsSummary', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                                    Text('${widget.selectedCategory} • $_detailsSummary', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                                     const SizedBox(height: 6),
                                     Text(_pricingDisplay, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.primary)),
                                   ],
@@ -181,7 +206,7 @@ class HostAddPropertyReviewCommonScreen extends StatelessWidget {
                         ...summaryRows.map((sec) {
                           final title = sec['title']!;
                           return InkWell(
-                            onTap: () => Navigator.pop(context),
+                            onTap: _isSubmitting ? null : () => Navigator.pop(context),
                             borderRadius: BorderRadius.circular(14),
                             child: Container(
                               margin: const EdgeInsets.only(bottom: 12),
@@ -206,13 +231,13 @@ class HostAddPropertyReviewCommonScreen extends StatelessWidget {
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.edit_square, color: AppColors.primary, size: 18),
-                                    onPressed: () => Navigator.pop(context),
+                                    onPressed: _isSubmitting ? null : () => Navigator.pop(context),
                                   ),
                                 ],
                               ),
                             ),
                           );
-                        }).toList(),
+                        }),
                       ],
                     ),
                   ),
@@ -220,62 +245,91 @@ class HostAddPropertyReviewCommonScreen extends StatelessWidget {
 
                 Padding(
                   padding: const EdgeInsets.all(20.0),
-                  child: CustomButton(
-                    text: 'Submit for review',
-                    onPressed: () async {
-                      final numericPrice = (pricing['basePricePerNight'] as num?)?.toDouble() ?? 4500.0;
-
-                      // Fetch host phone & name for status checking & registration
-                      final prefs = await SharedPreferences.getInstance();
-                      final currentPhone = prefs.getString('currentPhone') ?? '';
-                      final currentName = await AuthService.getUserName(phone: currentPhone);
-
-                      // 🚀 Submit to Backend (POST /api/properties/register)
-                      await HostService.registerProperty(
-                        propertyType: selectedCategory,
-                        propertyName: propertyName,
-                        title: propertyName,
-                        type: selectedCategory,
-                        propertyDetails: propertyDetails,
-                        address: addressMap,
-                        location: formattedAddress,
-                        city: addressMap['city'] ?? 'Hyderabad',
-                        state: addressMap['state'] ?? 'Telangana',
-                        country: 'India',
-                        description: description,
-                        amenities: amenities,
-                        houseRules: houseRules,
-                        pricing: pricing,
-                        pricePerNight: numericPrice,
-                        checkInCheckOut: {
-                          'checkInTime': checkInTime,
-                          'checkOutTime': checkOutTime,
-                        },
-                        checkInTime: checkInTime,
-                        checkOutTime: checkOutTime,
-                        photos: photos,
-                        documents: documents,
-                        hostPhone: currentPhone,
-                        hostName: currentName,
-                        status: 'pending',
-                      );
-
-                      // Navigate to Thank You screen
-                      if (!context.mounted) return;
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => HostPropertySubmittedThankYouScreen(
-                            propertyTitle: propertyName,
-                            propertyType: selectedCategory,
-                            pricePerNight: _pricingDisplay,
-                            hostPhone: currentPhone,
-                            hostName: currentName,
+                  child: _isSubmitting
+                      ? Container(
+                          width: double.infinity,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(14),
                           ),
+                          child: const Center(
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                            ),
+                          ),
+                        )
+                      : CustomButton(
+                          text: 'Submit for review',
+                          onPressed: () async {
+                            setState(() => _isSubmitting = true);
+
+                            final numericPrice = (widget.pricing['basePricePerNight'] as num?)?.toDouble() ?? 4500.0;
+
+                            // Fetch host phone & name for status checking & registration
+                            final prefs = await SharedPreferences.getInstance();
+                            final currentPhone = prefs.getString('currentPhone') ?? '';
+                            final currentName = await AuthService.getUserName(phone: currentPhone);
+
+                            // 🚀 Submit to Backend (POST /api/properties/register)
+                            final result = await HostService.registerProperty(
+                              propertyType: widget.selectedCategory,
+                              propertyName: widget.propertyName,
+                              title: widget.propertyName,
+                              type: widget.selectedCategory,
+                              propertyDetails: widget.propertyDetails,
+                              address: widget.addressMap,
+                              location: widget.formattedAddress,
+                              city: widget.addressMap['city'] ?? 'Hyderabad',
+                              state: widget.addressMap['state'] ?? 'Telangana',
+                              country: 'India',
+                              description: widget.description,
+                              amenities: widget.amenities,
+                              houseRules: widget.houseRules,
+                              pricing: widget.pricing,
+                              pricePerNight: numericPrice,
+                              checkInCheckOut: {
+                                'checkInTime': widget.checkInTime,
+                                'checkOutTime': widget.checkOutTime,
+                              },
+                              checkInTime: widget.checkInTime,
+                              checkOutTime: widget.checkOutTime,
+                              photos: widget.photos,
+                              documents: widget.documents,
+                              hostPhone: currentPhone,
+                              hostName: currentName,
+                              status: 'pending',
+                            );
+
+                            if (!mounted) return;
+                            setState(() => _isSubmitting = false);
+
+                            if (result['success'] != true && result['message'] != null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(result['message'].toString()),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                            }
+
+                            // Navigate to Thank You screen
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => HostPropertySubmittedThankYouScreen(
+                                  propertyTitle: widget.propertyName,
+                                  propertyType: widget.selectedCategory,
+                                  pricePerNight: _pricingDisplay,
+                                  hostPhone: currentPhone,
+                                  hostName: currentName,
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
                 ),
               ],
             ),
@@ -285,3 +339,4 @@ class HostAddPropertyReviewCommonScreen extends StatelessWidget {
     );
   }
 }
+

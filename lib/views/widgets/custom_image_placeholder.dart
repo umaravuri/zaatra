@@ -6,19 +6,53 @@ class CustomImagePlaceholder extends StatelessWidget {
   final double? height;
   final IconData icon;
   final String? label;
+  final String? imageUrl;
   final BorderRadius? borderRadius;
 
   const CustomImagePlaceholder({
-    Key? key,
+    super.key,
     this.width,
     this.height,
     this.icon = Icons.image_rounded,
     this.label,
+    this.imageUrl,
     this.borderRadius,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
+    final effectiveRadius = borderRadius ?? BorderRadius.circular(14);
+
+    if (imageUrl != null && imageUrl!.trim().isNotEmpty) {
+      final img = imageUrl!.trim();
+      return ClipRRect(
+        borderRadius: effectiveRadius,
+        child: SizedBox(
+          width: width,
+          height: height,
+          child: img.startsWith('http')
+              ? Image.network(
+                  img,
+                  width: width,
+                  height: height,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                )
+              : Image.asset(
+                  img,
+                  width: width,
+                  height: height,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                ),
+        ),
+      );
+    }
+
+    return _buildPlaceholder();
+  }
+
+  Widget _buildPlaceholder() {
     return Container(
       width: width,
       height: height,
